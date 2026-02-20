@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./config/db";
 import authRoutes from "./modules/auth/auth.routes";
 import userRoutes from "./modules/user/user.routes";
+import { ENV } from "./config/env";
 
 dotenv.config();
 connectDB();
@@ -20,6 +21,6 @@ app.get("/", (req, res) => {
   res.send("API Running");
 });
 
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+app.listen(ENV.PORT, () => {
+  console.log(`Server running on port ${ENV.PORT}`);
 });
