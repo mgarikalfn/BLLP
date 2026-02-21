@@ -1,9 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { User } from "../user/user.model";
 import { Role } from "../user/user.model";
-import { ENV } from "../../config/env";
 import { generateToken } from "../../utils/jwt";
 
 export const register = async (req: Request, res: Response) => {
@@ -55,7 +53,8 @@ export const login = async (req: Request, res: Response) => {
     });
 
     res.json({ token });
-  } catch {
+  } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
