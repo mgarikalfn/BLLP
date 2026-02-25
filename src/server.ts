@@ -7,6 +7,7 @@ import userRoutes from "./modules/user/user.routes";
 import { ENV } from "./config/env";
 import topicRoutes from "./modules/content/topic.routes";
 import lessonRoutes from "./modules/content/lesson.routes";
+import studyRoutes from "./modules/study/study.routes";
 
 dotenv.config();
 connectDB();
@@ -21,6 +22,7 @@ app.use("/api/users", userRoutes);
 
 app.use("/api/topics", topicRoutes);
 app.use("/api/lessons", lessonRoutes);
+app.use("/api/study", studyRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");
