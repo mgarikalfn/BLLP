@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { Topic } from "./topic.model";
+
 import { generateSlug } from "../../utils/slugify";
+import { Lesson } from "./lesson.model";
 
 export const createTopic = async (req: Request, res: Response) => {
   try {
@@ -35,7 +37,7 @@ const topicPayload = {
   thumbnailUrl: thumbnailUrl
 };
 
-console.log("FINAL PAYLOAD BEFORE DB:", JSON.stringify(topicPayload, null, 2));
+//console.log("FINAL PAYLOAD BEFORE DB:", JSON.stringify(topicPayload, null, 2));
 
 const topic = await Topic.create(topicPayload);
 
@@ -48,10 +50,53 @@ const topic = await Topic.create(topicPayload);
     res.status(500).json({ message: error.message || "Server error" });
   }
 };
+
 export const getAllTopics = async (_req: Request, res: Response) => {
   try {
     const topics = await Topic.find().sort({ createdAt: -1 });
     res.json(topics);
+  } catch {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const updateTopic = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, description, level, thumbnailUrl } = req.body;
+
+    const topic = await Topic.findById(id);
+    if (!topic) return res.status(404).json({ message: "Topic not found" });
+
+    if (title?.am) {
+      topic.title = title;
+      topic.slug = generateSlug(title.am);
+    }
+
+    if (description) topic.description = description;
+    if (level) topic.level = level;
+    if (thumbnailUrl !== undefined) topic.thumbnailUrl = thumbnailUrl;
+
+    await topic.save();
+
+    res.json(topic);
+  } catch {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+export const deleteTopic = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const topic = await Topic.findById(id);
+    if (!topic) return res.status(404).json({ message: "Topic not found" });
+
+    await Lesson.deleteMany({ topicId: id });
+    await topic.deleteOne();
+
+    res.json({ message: "Topic and related lessons deleted" });
   } catch {
     res.status(500).json({ message: "Server error" });
   }
