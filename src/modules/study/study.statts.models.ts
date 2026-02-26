@@ -18,6 +18,7 @@ export interface IStudyStats {
   seasonId: string;
 
   seasonTier:string;
+  badges:string[];
 }
 
 const statsSchema = new Schema<IStudyStats>(
@@ -44,6 +45,7 @@ const statsSchema = new Schema<IStudyStats>(
     seasonId: { type: String, default: "S1" },
 
     seasonTier: { type: String, default: "Bronze" },
+    badges: [{ type: String }],
   },
   { timestamps: true },
 );

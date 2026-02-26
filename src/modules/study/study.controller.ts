@@ -6,6 +6,7 @@ import { StudyStats } from "./study.statts.models";
 import { User } from "../user/user.model";
 import { CURRENT_SEASON } from "./season.config";
 import { calculateTier } from "./tier.utils";
+import { getSeasonReward } from "./season.rewards";
 
 interface AuthRequest extends Request {
   user?: {
@@ -529,6 +530,42 @@ export const getSeasonTier = async (
       totalPlayers,
       tier,
       seasonXp: userStats.seasonXp
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Server error"
+    });
+  }
+};
+
+
+export const finalizeSeason = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const players = await StudyStats.find({
+      seasonId: CURRENT_SEASON.id
+    });
+
+    for (const player of players) {
+      const reward = getSeasonReward(player.seasonTier);
+
+      player.xp += reward.xpBonus;
+      player.badges.push(
+        `${CURRENT_SEASON.id}_${player.seasonTier}`
+      );
+
+      player.seasonXp = 0;
+      player.seasonTier = "Bronze";
+
+      await player.save();
+    }
+
+    return res.json({
+      message: "Season finalized successfully"
     });
 
   } catch (error) {
