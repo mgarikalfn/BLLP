@@ -3,6 +3,7 @@ import { Progress } from "./progress.model";
 import { calculateSM2 } from "./sm2.utils";
 import { Lesson } from "../content/lesson.model";
 import { StudyStats } from "./study.statts.models";
+import { User } from "../user/user.model";
 
 interface AuthRequest extends Request {
   user?: {
@@ -320,6 +321,56 @@ export const getUserLevel = async (
     });
   } catch {
     res.status(500).json({
+      message: "Server error"
+    });
+  }
+};
+
+
+export const getLeaderboard = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = 10;
+    const skip = (page - 1) * limit;
+
+    const leaders = await StudyStats.find()
+      .sort({ xp: -1, currentStreak: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    // Attach basic user info safely
+    const userIds = leaders.map(l => l.userId);
+
+    const users = await User.find({
+      _id: { $in: userIds }
+    })
+      .select("username")
+      .lean();
+
+    const userMap = new Map(
+      users.map(u => [u._id.toString(), u.username])
+    );
+
+    const result = leaders.map((l, index) => ({
+      rank: skip + index + 1,
+      username: userMap.get(l.userId.toString()) || "Unknown",
+      xp: l.xp,
+      level: l.level,
+      streak: l.currentStreak
+    }));
+
+    return res.json({
+      page,
+      leaders: result
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
       message: "Server error"
     });
   }

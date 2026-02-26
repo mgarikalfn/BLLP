@@ -37,5 +37,5 @@ const statsSchema = new Schema<IStudyStats>(
   },
   { timestamps: true },
 );
-
+statsSchema.index({ xp: -1 });
 export const StudyStats = model<IStudyStats>("StudyStats", statsSchema);

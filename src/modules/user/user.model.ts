@@ -3,16 +3,17 @@ import { Schema, model, Document } from "mongoose";
 export enum Role {
   ADMIN = "ADMIN",
   EXPERT = "EXPERT",
-  LEARNER = "LEARNER"
+  LEARNER = "LEARNER",
 }
 
 export enum UserStatus {
   ACTIVE = "ACTIVE",
-  BANNED = "BANNED"
+  BANNED = "BANNED",
 }
 
 export interface IUser extends Document {
   email: string;
+  username: string;
   passwordHash: string;
   role: Role;
   userStatus: UserStatus;
@@ -22,20 +23,21 @@ export interface IUser extends Document {
 const userSchema = new Schema<IUser>(
   {
     email: { type: String, required: true, unique: true },
+    username: { type: String, unique: true, trim: true, required: true },
     passwordHash: { type: String, required: true },
     role: {
       type: String,
       enum: Object.values(Role),
-      default: Role.LEARNER
+      default: Role.LEARNER,
     },
     userStatus: {
       type: String,
       enum: Object.values(UserStatus),
-      default: UserStatus.ACTIVE
+      default: UserStatus.ACTIVE,
     },
-    nativeLanguage: { type: String, required: true }
+    nativeLanguage: { type: String, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const User = model<IUser>("User", userSchema);

@@ -6,25 +6,33 @@ import { generateToken } from "../../utils/jwt";
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email, password, nativeLanguage } = req.body;
+    const { email, password, username, nativeLanguage } = req.body;
 
-    if (!email || !password || !nativeLanguage) {
+    // 1️⃣ Validation
+    if (!email || !password || !username || !nativeLanguage) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ message: "Email exists" });
+    // 2️⃣ Double Collision Check (Email & Username)
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) return res.status(400).json({ message: "Email already exists" });
 
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) return res.status(400).json({ message: "Username already taken" });
+
+    // 3️⃣ Security
     const hashed = await bcrypt.hash(password, 10);
 
+    // 4️⃣ Creation
     const user = await User.create({
       email,
+      username, // 👈 Identity saved
       passwordHash: hashed,
       nativeLanguage,
       role: Role.LEARNER,
     });
 
-    res.status(201).json({ id: user._id });
+    res.status(201).json({ id: user._id, username: user.username });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
