@@ -4,6 +4,7 @@ import { calculateSM2 } from "./sm2.utils";
 import { Lesson } from "../content/lesson.model";
 import { StudyStats } from "./study.statts.models";
 import { User } from "../user/user.model";
+import { CURRENT_SEASON } from "./season.config";
 
 interface AuthRequest extends Request {
   user?: {
@@ -87,6 +88,11 @@ export const reviewLesson = async (req: Request, res: Response) => {
     stats.lastStudyDate = new Date();
     await stats.save();
 
+    if (stats.seasonId !== CURRENT_SEASON.id) {
+      stats.seasonId = CURRENT_SEASON.id;
+      stats.seasonXp = 0;
+    }
+
     // ===== XP CALCULATION =====
     let xpEarned = 0;
 
@@ -104,6 +110,8 @@ export const reviewLesson = async (req: Request, res: Response) => {
     }
 
     stats.xp = (stats.xp || 0) + xpEarned;
+
+    stats.seasonXp += xpEarned;
 
     // Recalculate level
     const newLevel = calculateLevel(stats.xp);
@@ -296,10 +304,7 @@ export const getWeakAreas = async (req: Request, res: Response) => {
   }
 };
 
-export const getUserLevel = async (
-  req: Request,
-  res: Response
-) => {
+export const getUserLevel = async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
 
@@ -309,7 +314,7 @@ export const getUserLevel = async (
     if (!stats) {
       return res.json({
         xp: 0,
-        level: 1
+        level: 1,
       });
     }
 
@@ -317,20 +322,16 @@ export const getUserLevel = async (
       xp: stats.xp,
       level: stats.level,
       streak: stats.currentStreak,
-      longestStreak: stats.longestStreak
+      longestStreak: stats.longestStreak,
     });
   } catch {
     res.status(500).json({
-      message: "Server error"
+      message: "Server error",
     });
   }
 };
 
-
-export const getLeaderboard = async (
-  req: Request,
-  res: Response
-) => {
+export const getLeaderboard = async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = 10;
@@ -343,35 +344,144 @@ export const getLeaderboard = async (
       .lean();
 
     // Attach basic user info safely
-    const userIds = leaders.map(l => l.userId);
+    const userIds = leaders.map((l) => l.userId);
 
     const users = await User.find({
-      _id: { $in: userIds }
+      _id: { $in: userIds },
     })
       .select("username")
       .lean();
 
-    const userMap = new Map(
-      users.map(u => [u._id.toString(), u.username])
-    );
+    const userMap = new Map(users.map((u) => [u._id.toString(), u.username]));
 
     const result = leaders.map((l, index) => ({
       rank: skip + index + 1,
       username: userMap.get(l.userId.toString()) || "Unknown",
       xp: l.xp,
       level: l.level,
-      streak: l.currentStreak
+      streak: l.currentStreak,
     }));
 
     return res.json({
       page,
-      leaders: result
+      leaders: result,
     });
-
   } catch (error) {
     console.error(error);
     return res.status(500).json({
-      message: "Server error"
+      message: "Server error",
+    });
+  }
+};
+
+export const getRelativeLeaderboard = async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+
+  try {
+    const currentStats = await StudyStats.findOne({ userId });
+
+    if (!currentStats) {
+      return res.status(404).json({
+        message: "User stats not found",
+      });
+    }
+
+    // Count users ahead (higher XP OR same XP but higher streak)
+    const rank =
+      (await StudyStats.countDocuments({
+        $or: [
+          { xp: { $gt: currentStats.xp } },
+          {
+            xp: currentStats.xp,
+            currentStreak: { $gt: currentStats.currentStreak },
+          },
+        ],
+      })) + 1;
+
+    const windowSize = 5;
+
+    const startRank = Math.max(rank - windowSize, 1);
+    const skip = startRank - 1;
+    const limit = windowSize * 2 + 1;
+
+    const windowUsers = await StudyStats.find()
+      .sort({ xp: -1, currentStreak: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const userIds = windowUsers.map((u) => u.userId);
+
+    const users = await User.find({
+      _id: { $in: userIds },
+    })
+      .select("username")
+      .lean();
+
+    const userMap = new Map(users.map((u) => [u._id.toString(), u.username]));
+
+    const leaders = windowUsers.map((u, index) => ({
+      rank: skip + index + 1,
+      username: userMap.get(u.userId.toString()) || "Unknown",
+      xp: u.xp,
+      level: u.level,
+      streak: u.currentStreak,
+      isCurrentUser: u.userId.toString() === userId,
+    }));
+
+    return res.json({
+      currentRank: rank,
+      leaders,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getSeasonLeaderboard = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = 10;
+    const skip = (page - 1) * limit;
+
+    const leaders = await StudyStats.find({
+      seasonId: CURRENT_SEASON.id,
+    })
+      .sort({ seasonXp: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const userIds = leaders.map((l) => l.userId);
+
+    const users = await User.find({
+      _id: { $in: userIds },
+    })
+      .select("username")
+      .lean();
+
+    const userMap = new Map(users.map((u) => [u._id.toString(), u.username]));
+
+    const result = leaders.map((l, index) => ({
+      rank: skip + index + 1,
+      username: userMap.get(l.userId.toString()) || "Unknown",
+      seasonXp: l.seasonXp,
+      level: l.level,
+    }));
+
+    return res.json({
+      season: CURRENT_SEASON.name,
+      page,
+      leaders: result,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Server error",
     });
   }
 };

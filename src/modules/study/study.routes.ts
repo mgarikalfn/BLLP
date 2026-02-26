@@ -6,7 +6,9 @@ import {
   getStudyStats,
   getWeakAreas,
   getUserLevel,
-  getLeaderboard
+  getLeaderboard,
+  getRelativeLeaderboard,
+  getSeasonLeaderboard,
 } from "./study.controller";
 import { authenticate } from "../../middleware/auth.middleware";
 
@@ -19,5 +21,7 @@ router.get("/stats", authenticate, getStudyStats);
 router.get("/weak", authenticate, getWeakAreas);
 router.get("/level", authenticate, getUserLevel);
 router.get("/leaderboard", authenticate, getLeaderboard);
+router.get("/leaderboard/relative", authenticate, getRelativeLeaderboard);
+router.get("/leaderboard/season", authenticate, getSeasonLeaderboard);
 
 export default router;
