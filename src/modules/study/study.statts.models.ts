@@ -10,6 +10,9 @@ export interface IStudyStats {
 
   dailyGoal: number;
   todayCount: number;
+
+  xp: number;
+  level: number;
 }
 
 const statsSchema = new Schema<IStudyStats>(
@@ -18,7 +21,7 @@ const statsSchema = new Schema<IStudyStats>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true
+      unique: true,
     },
 
     currentStreak: { type: Number, default: 0 },
@@ -27,12 +30,12 @@ const statsSchema = new Schema<IStudyStats>(
     lastStudyDate: { type: Date },
 
     dailyGoal: { type: Number, default: 10 },
-    todayCount: { type: Number, default: 0 }
+    todayCount: { type: Number, default: 0 },
+
+    xp: { type: Number, default: 0 },
+    level: { type: Number, default: 1 },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-export const StudyStats = model<IStudyStats>(
-  "StudyStats",
-  statsSchema
-);
+export const StudyStats = model<IStudyStats>("StudyStats", statsSchema);

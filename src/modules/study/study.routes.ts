@@ -4,7 +4,8 @@ import {
   getDueLessons,
   startStudySession,
   getStudyStats,
-  getWeakAreas
+  getWeakAreas,
+  getUserLevel
 } from "./study.controller";
 import { authenticate } from "../../middleware/auth.middleware";
 
@@ -15,6 +16,6 @@ router.get("/due", authenticate, getDueLessons);
 router.get("/session", authenticate, startStudySession);
 router.get("/stats", authenticate, getStudyStats);
 router.get("/weak", authenticate, getWeakAreas);
-
+router.get("/level", authenticate, getUserLevel);
 
 export default router;

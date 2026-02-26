@@ -38,7 +38,7 @@ export const reviewLesson = async (req: Request, res: Response) => {
       quality,
       progress.repetition,
       progress.interval,
-      progress.easeFactor
+      progress.easeFactor,
     );
 
     progress.repetition = result.repetition;
@@ -46,7 +46,7 @@ export const reviewLesson = async (req: Request, res: Response) => {
     progress.easeFactor = result.easeFactor;
     progress.lastReviewed = new Date();
     progress.nextReview = new Date(
-      Date.now() + result.interval * 24 * 60 * 60 * 1000
+      Date.now() + result.interval * 24 * 60 * 60 * 1000,
     );
 
     await progress.save();
@@ -68,8 +68,7 @@ export const reviewLesson = async (req: Request, res: Response) => {
       stats.todayCount = 1;
     } else {
       const diffDays =
-        (today.getTime() - lastStudy.getTime()) /
-        (1000 * 60 * 60 * 24);
+        (today.getTime() - lastStudy.getTime()) / (1000 * 60 * 60 * 24);
 
       if (diffDays === 0) {
         stats.todayCount += 1;
@@ -82,12 +81,34 @@ export const reviewLesson = async (req: Request, res: Response) => {
       }
     }
 
-    stats.longestStreak = Math.max(
-      stats.longestStreak,
-      stats.currentStreak
-    );
+    stats.longestStreak = Math.max(stats.longestStreak, stats.currentStreak);
 
     stats.lastStudyDate = new Date();
+    await stats.save();
+
+    // ===== XP CALCULATION =====
+    let xpEarned = 0;
+
+    // Base XP depends on quality
+    xpEarned = quality * 10; // 0–50 XP
+
+    // Bonus for weak lesson recovery
+    if (progress.easeFactor < 2.0 && quality >= 4) {
+      xpEarned += 20;
+    }
+
+    // Streak milestone bonus
+    if (stats.currentStreak > 0 && stats.currentStreak % 7 === 0) {
+      xpEarned += 50;
+    }
+
+    stats.xp = (stats.xp || 0) + xpEarned;
+
+    // Recalculate level
+    const newLevel = calculateLevel(stats.xp);
+    const leveledUp = newLevel > stats.level;
+    stats.level = newLevel;
+
     await stats.save();
 
     // ===== RESPONSE =====
@@ -97,6 +118,10 @@ export const reviewLesson = async (req: Request, res: Response) => {
       streak: stats.currentStreak,
       todayCount: stats.todayCount,
       dailyGoal: stats.dailyGoal,
+      xpEarned,
+      totalXP: stats.xp,
+      level: stats.level,
+      leveledUp,
     });
   } catch (error) {
     console.error(error);
@@ -125,59 +150,87 @@ export const getDueLessons = async (req: Request, res: Response) => {
 };
 
 export const startStudySession = async (req: Request, res: Response) => {
-  try {
-    const authReq = req as AuthRequest;
-    const userId = authReq.user!.id;
-    const limit = parseInt(req.query.limit as string) || 10;
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
 
-    // 1️⃣ Get due lessons
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+    const now = new Date();
+
+    // ===== FETCH POOLS =====
     const dueProgress = await Progress.find({
       userId,
-      nextReview: { $lte: new Date() },
-    })
-      .populate("lessonId")
-      .limit(limit);
+      nextReview: { $lte: now },
+    }).populate("lessonId");
 
-    const dueLessons = dueProgress.map((p) => p.lessonId);
+    const weakProgress = await Progress.find({
+      userId,
+      easeFactor: { $lt: 2.0 },
+      nextReview: { $gt: now },
+    }).populate("lessonId");
 
-    const remainingSlots = limit - dueLessons.length;
+    const seenProgress = await Progress.find({ userId }).select("lessonId");
+    const seenIds = seenProgress.map((p) => p.lessonId.toString());
 
-    let newLessons: any[] = [];
-
-    if (remainingSlots > 0) {
-      // Find lessons user has progress for
-      const userProgress = await Progress.find({
-        userId,
-      }).select("lessonId");
-
-      const seenLessonIds = userProgress.map((p) => p.lessonId.toString());
-
-      newLessons = await Lesson.find({
-        _id: { $nin: seenLessonIds },
-        isVerified: true,
-      })
-        .sort({ createdAt: 1 })
-        .limit(remainingSlots);
-    }
-
-    res.json({
-      due: dueLessons,
-      new: newLessons,
-      total: dueLessons.length + newLessons.length,
+    const newLessons = await Lesson.find({
+      _id: { $nin: seenIds },
+      isVerified: true,
     });
-  } catch {
-    res.status(500).json({
+
+    // ===== EXTRACT LESSON OBJECTS =====
+    const dueLessons = dueProgress.map((p) => p.lessonId);
+    const weakLessons = weakProgress.map((p) => p.lessonId);
+
+    // Shuffle helper
+    const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
+
+    const shuffledDue = shuffle([...dueLessons]);
+    const shuffledWeak = shuffle([...weakLessons]);
+    const shuffledNew = shuffle([...newLessons]);
+
+    const sessionLessons: any[] = [];
+    const usedIds = new Set<string>();
+
+    const pickFrom = (pool: any[], maxCount: number) => {
+      for (const lesson of pool) {
+        if (sessionLessons.length >= maxCount) break;
+        const id = lesson._id.toString();
+        if (!usedIds.has(id)) {
+          sessionLessons.push(lesson);
+          usedIds.add(id);
+        }
+      }
+    };
+
+    // ===== WEIGHTED TARGETS =====
+    const dueTarget = Math.ceil(limit * 0.6);
+    const weakTarget = Math.ceil(limit * 0.25);
+    const newTarget = limit;
+
+    pickFrom(shuffledDue, dueTarget);
+    pickFrom(shuffledWeak, dueTarget + weakTarget);
+    pickFrom(shuffledNew, newTarget);
+
+    return res.json({
+      lessons: sessionLessons,
+      breakdown: {
+        due: shuffledDue.length,
+        weak: shuffledWeak.length,
+        new: shuffledNew.length,
+      },
+      total: sessionLessons.length,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
       message: "Server error",
     });
   }
 };
 
-export const getStudyStats = async (
-  req: Request,
-  res: Response
-) => {
+export const getStudyStats = async (req: Request, res: Response) => {
   try {
-     const authReq = req as AuthRequest;
+    const authReq = req as AuthRequest;
     const userId = authReq.user!.id;
 
     let stats = await StudyStats.findOne({ userId });
@@ -190,15 +243,12 @@ export const getStudyStats = async (
     res.json(stats);
   } catch {
     res.status(500).json({
-      message: "Server error"
+      message: "Server error",
     });
   }
 };
 
-export const getWeakAreas = async (
-  req: Request,
-  res: Response
-) => {
+export const getWeakAreas = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthRequest;
     const userId = authReq.user!.id;
@@ -206,20 +256,20 @@ export const getWeakAreas = async (
     // 1️⃣ Weak lessons (low ease factor)
     const weakProgress = await Progress.find({
       userId,
-      easeFactor: { $lt: 2.0 }
+      easeFactor: { $lt: 2.0 },
     }).populate("lessonId");
 
-    const weakLessons = weakProgress.map(p => ({
+    const weakLessons = weakProgress.map((p) => ({
       lesson: p.lessonId,
       easeFactor: p.easeFactor,
       interval: p.interval,
-      repetition: p.repetition
+      repetition: p.repetition,
     }));
 
     // 2️⃣ Aggregate weak topics
     const topicMap: Record<string, number> = {};
 
-    weakProgress.forEach(p => {
+    weakProgress.forEach((p) => {
       const lesson: any = p.lessonId;
       const topicId = lesson.topicId.toString();
 
@@ -229,28 +279,58 @@ export const getWeakAreas = async (
     const weakTopics = Object.entries(topicMap)
       .map(([topicId, count]) => ({
         topicId,
-        weakLessonCount: count
+        weakLessonCount: count,
       }))
       .sort((a, b) => b.weakLessonCount - a.weakLessonCount);
 
     res.json({
       weakLessons,
-      weakTopics
+      weakTopics,
     });
-
   } catch (error) {
     console.error(error);
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getUserLevel = async (
+  req: Request,
+  res: Response
+) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+
+  try {
+    const stats = await StudyStats.findOne({ userId });
+
+    if (!stats) {
+      return res.json({
+        xp: 0,
+        level: 1
+      });
+    }
+
+    res.json({
+      xp: stats.xp,
+      level: stats.level,
+      streak: stats.currentStreak,
+      longestStreak: stats.longestStreak
+    });
+  } catch {
     res.status(500).json({
       message: "Server error"
     });
   }
 };
 
-
-
-
 const getStartOfDay = (date: Date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   return d;
+};
+
+const calculateLevel = (xp: number) => {
+  return Math.floor(Math.sqrt(xp / 100)) + 1;
 };
