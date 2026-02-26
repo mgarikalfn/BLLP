@@ -16,6 +16,8 @@ export interface IStudyStats {
 
   seasonXp: number;
   seasonId: string;
+
+  seasonTier:string;
 }
 
 const statsSchema = new Schema<IStudyStats>(
@@ -40,9 +42,11 @@ const statsSchema = new Schema<IStudyStats>(
 
     seasonXp: { type: Number, default: 0 },
     seasonId: { type: String, default: "S1" },
+
+    seasonTier: { type: String, default: "Bronze" },
   },
   { timestamps: true },
 );
 
-statsSchema.index({ seasonId: 1, seasonXp: -1 });
+statsSchema.index({ seasonId: 1, seasonXp: -1  , seasonTier: 1});
 export const StudyStats = model<IStudyStats>("StudyStats", statsSchema);

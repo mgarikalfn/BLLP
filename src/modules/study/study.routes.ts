@@ -9,6 +9,7 @@ import {
   getLeaderboard,
   getRelativeLeaderboard,
   getSeasonLeaderboard,
+  getSeasonTier,
 } from "./study.controller";
 import { authenticate } from "../../middleware/auth.middleware";
 
@@ -23,5 +24,6 @@ router.get("/level", authenticate, getUserLevel);
 router.get("/leaderboard", authenticate, getLeaderboard);
 router.get("/leaderboard/relative", authenticate, getRelativeLeaderboard);
 router.get("/leaderboard/season", authenticate, getSeasonLeaderboard);
+router.get("/season/tier", authenticate, getSeasonTier);
 
 export default router;

@@ -5,6 +5,7 @@ import { Lesson } from "../content/lesson.model";
 import { StudyStats } from "./study.statts.models";
 import { User } from "../user/user.model";
 import { CURRENT_SEASON } from "./season.config";
+import { calculateTier } from "./tier.utils";
 
 interface AuthRequest extends Request {
   user?: {
@@ -482,6 +483,58 @@ export const getSeasonLeaderboard = async (req: Request, res: Response) => {
     console.error(error);
     return res.status(500).json({
       message: "Server error",
+    });
+  }
+};
+
+
+export const getSeasonTier = async (
+  req: Request,
+  res: Response
+) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+
+  try {
+    const totalPlayers = await StudyStats.countDocuments({
+      seasonId: CURRENT_SEASON.id
+    });
+
+    const userStats = await StudyStats.findOne({
+      userId,
+      seasonId: CURRENT_SEASON.id
+    });
+
+    if (!userStats) {
+      return res.status(404).json({
+        message: "Stats not found"
+      });
+    }
+
+    const rank =
+      (await StudyStats.countDocuments({
+        seasonId: CURRENT_SEASON.id,
+        seasonXp: { $gt: userStats.seasonXp }
+      })) + 1;
+
+    const tier = calculateTier(rank, totalPlayers);
+
+    // Save tier
+    userStats.seasonTier = tier;
+    await userStats.save();
+
+    return res.json({
+      season: CURRENT_SEASON.name,
+      rank,
+      totalPlayers,
+      tier,
+      seasonXp: userStats.seasonXp
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Server error"
     });
   }
 };
