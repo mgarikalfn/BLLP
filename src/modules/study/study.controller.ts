@@ -199,31 +199,33 @@ export const startStudySession = async (req: Request, res: Response) => {
     const shuffledWeak = shuffle([...weakLessons]);
     const shuffledNew = shuffle([...newLessons]);
 
+    // ... Shuffling code stays same ...
+
+    // ===== SENIOR PICKING LOGIC =====
+    // We prioritize Due, then Weak, then New until we hit the LIMIT.
+    const combinedPool = [
+      ...shuffledDue,
+      ...shuffledWeak,
+      ...shuffledNew
+    ];
+
     const sessionLessons: any[] = [];
     const usedIds = new Set<string>();
 
-    const pickFrom = (pool: any[], maxCount: number) => {
-      for (const lesson of pool) {
-        if (sessionLessons.length >= maxCount) break;
-        const id = lesson._id.toString();
-        if (!usedIds.has(id)) {
-          sessionLessons.push(lesson);
-          usedIds.add(id);
-        }
+    for (const lesson of combinedPool) {
+      if (sessionLessons.length >= limit) break; // Fill up to the limit (e.g., 10)
+      
+      const id = lesson._id.toString();
+      if (!usedIds.has(id)) {
+        sessionLessons.push(lesson);
+        usedIds.add(id);
       }
-    };
+    }
 
-    // ===== WEIGHTED TARGETS =====
-    const dueTarget = Math.ceil(limit * 0.6);
-    const weakTarget = Math.ceil(limit * 0.25);
-    const newTarget = limit;
-
-    pickFrom(shuffledDue, dueTarget);
-    pickFrom(shuffledWeak, dueTarget + weakTarget);
-    pickFrom(shuffledNew, newTarget);
-
+    // Final check: if still empty, your Lesson collection might be empty or unverified
     return res.json({
       lessons: sessionLessons,
+      userStats: authReq.user, // Ensure this matches your frontend UserStats interface!
       breakdown: {
         due: shuffledDue.length,
         weak: shuffledWeak.length,
