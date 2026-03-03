@@ -8,6 +8,8 @@ import { ENV } from "./config/env";
 import topicRoutes from "./modules/content/topic.routes";
 import lessonRoutes from "./modules/content/lesson.routes";
 import studyRoutes from "./modules/study/study.routes";
+import learnRoutes from "./modules/learn/learn.routes";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 
 dotenv.config();
 connectDB();
@@ -23,6 +25,9 @@ app.use("/api/users", userRoutes);
 app.use("/api/topics", topicRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/study", studyRoutes);
+app.use("/api/learn", learnRoutes);
+
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");
