@@ -10,6 +10,7 @@ import lessonRoutes from "./modules/content/lesson.routes";
 import studyRoutes from "./modules/study/study.routes";
 import learnRoutes from "./modules/learn/learn.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
+import leaderboardRoutes from "./modules/leaderboard/leaderboard.routes";
 
 dotenv.config();
 connectDB();
@@ -28,6 +29,7 @@ app.use("/api/study", studyRoutes);
 app.use("/api/learn", learnRoutes);
 
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/leaderboard", leaderboardRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");
