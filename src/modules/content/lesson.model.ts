@@ -1,64 +1,65 @@
 import { Schema, model, Document, Types } from "mongoose";
 
-export interface ILocalizedText {
-  am: string;
-  ao: string;
-}
-
-export interface IQuizQuestion {
-  question: ILocalizedText;
-  options: ILocalizedText[];
-  correctAnswerIndex: number;
-}
-
 export interface ILesson extends Document {
   topicId: Types.ObjectId;
   order: number;
-  content: ILocalizedText;
-  audioUrl?: string;
-  writingPrompt?: string;
+  title: {
+    am: string; // Amharic
+    ao: string; // Afan Oromo
+  };
+  // 1. FLASHCARD CONTENT (The "What")
+  vocabulary: Array<{
+    am: string;
+    ao: string;
+    audioUrl?: string; // For pronunciation
+    example?: { am: string; ao: string }; // Context helps memory
+  }>;
+  // 2. ASSESSMENT (The "Gatekeeper")
+  quiz: Array<{
+    question: { am: string; ao: string };
+    options: Array<{ am: string; ao: string }>;
+    correctAnswerIndex: number;
+  }>;
   isVerified: boolean;
-  quiz: IQuizQuestion[];
 }
-
-const localizedSchema = new Schema<ILocalizedText>(
-  {
-    am: { type: String, required: true },
-    ao: { type: String, required: true }
-  },
-  { _id: false }
-);
-
-const quizSchema = new Schema<IQuizQuestion>(
-  {
-    question: { type: localizedSchema, required: true },
-    options: {
-      type: [localizedSchema],
-      required: true
-    },
-    correctAnswerIndex: { type: Number, required: true }
-  },
-  { _id: false }
-);
 
 const lessonSchema = new Schema<ILesson>(
   {
-    topicId: {
-      type: Schema.Types.ObjectId,
-      ref: "Topic",
-      required: true
-    },
+    topicId: { type: Schema.Types.ObjectId, ref: "Topic", required: true, index: true },
     order: { type: Number, required: true },
-    content: { type: localizedSchema, required: true },
-    audioUrl: { type: String },
-    writingPrompt: { type: String },
+    title: {
+      am: { type: String, required: true },
+      ao: { type: String, required: true },
+    },
+    vocabulary: [
+      {
+        am: { type: String, required: true },
+        ao: { type: String, required: true },
+        audioUrl: { type: String },
+        example: {
+          am: { type: String },
+          ao: { type: String },
+        },
+      },
+    ],
+    quiz: [
+      {
+        question: {
+          am: { type: String, required: true },
+          ao: { type: String, required: true },
+        },
+        options: [
+          {
+            am: { type: String, required: true },
+            ao: { type: String, required: true },
+          },
+        ],
+        correctAnswerIndex: { type: Number, required: true },
+      },
+    ],
     isVerified: { type: Boolean, default: false },
-    quiz: { type: [quizSchema], default: [] }
   },
   { timestamps: true }
 );
-
-// Index to enforce correct lesson ordering within a topic
-lessonSchema.index({ topicId: 1, order: 1 }, { unique: true });
 
 export const Lesson = model<ILesson>("Lesson", lessonSchema);

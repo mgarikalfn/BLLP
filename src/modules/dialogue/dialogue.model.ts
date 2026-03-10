@@ -68,7 +68,7 @@ const dialogueSchema = new Schema<IDialogue>(
           am: { type: String, required: true },
           ao: { type: String, required: true },
         },
-        isInteractive: { type: String, default: false },
+        isInteractive: { type: Boolean, default: false },
         question: {
           am: { type: String },
           ao: { type: String },

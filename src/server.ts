@@ -31,6 +31,7 @@ app.use("/api/learn", learnRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 
+
 app.get("/", (req, res) => {
   res.send("API Running");
 });

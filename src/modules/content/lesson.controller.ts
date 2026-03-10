@@ -3,7 +3,7 @@ import { Lesson } from "./lesson.model";
 
 export const createLesson = async (req: Request, res: Response) => {
   try {
-    const { topicId, order, content, audioUrl, writingPrompt, quiz } = req.body;
+    const { topicId, order, title, vocabulary, quiz, isVerified } = req.body;
 
     // Log the incoming data to verify what Postman is sending
     // console.log("Incoming Lesson Data:", JSON.stringify(req.body, null, 2));
@@ -11,10 +11,10 @@ export const createLesson = async (req: Request, res: Response) => {
     const lesson = await Lesson.create({
       topicId,
       order,
-      content,
-      audioUrl,
-      writingPrompt,
-      quiz
+      title,
+      vocabulary,
+      quiz,
+      isVerified // Optional: will default to false if not provided, based on your schema
     });
 
     return res.status(201).json(lesson);
