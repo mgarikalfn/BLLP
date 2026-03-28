@@ -1,15 +1,15 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import { User } from "../user/user.model";
+import { ProficiencyLevel, targetLanguage, User } from "../user/user.model";
 import { Role } from "../user/user.model";
 import { generateToken } from "../../utils/jwt";
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email, password, username, nativeLanguage } = req.body;
+    const { email, password, username, targetLang,proficiency } = req.body;
 
     // 1️⃣ Validation
-    if (!email || !password || !username || !nativeLanguage) {
+    if (!email || !password || !username || !targetLang|| !proficiency) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
@@ -28,7 +28,8 @@ export const register = async (req: Request, res: Response) => {
       email,
       username, // 👈 Identity saved
       passwordHash: hashed,
-      nativeLanguage,
+      targetLanguage:targetLang as targetLanguage,
+      ProficiencyLevel:(proficiency as ProficiencyLevel) || ProficiencyLevel.BEGINNER,
       role: Role.LEARNER,
     });
 

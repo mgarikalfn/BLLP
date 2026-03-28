@@ -11,13 +11,25 @@ export enum UserStatus {
   BANNED = "BANNED",
 }
 
+export enum ProficiencyLevel {
+  BEGINNER = "BEGINNER",
+  INTERMEDIATE = "INTERMEDIATE",
+  ADVANCED = "ADVANCED",
+}
+
+export enum targetLanguage {
+  AMHARIC = "AMHARIC",
+  OROMO = "OROMO",
+}
+
 export interface IUser extends Document {
   email: string;
   username: string;
   passwordHash: string;
   role: Role;
   userStatus: UserStatus;
-  nativeLanguage: string;
+  ProficiencyLevel: ProficiencyLevel;
+  targetLanguage: targetLanguage;
 }
 
 const userSchema = new Schema<IUser>(
@@ -35,7 +47,16 @@ const userSchema = new Schema<IUser>(
       enum: Object.values(UserStatus),
       default: UserStatus.ACTIVE,
     },
-    nativeLanguage: { type: String, required: true },
+    ProficiencyLevel: {
+      type: String,
+      enum: Object.values(ProficiencyLevel),
+      default: ProficiencyLevel.BEGINNER,
+    },
+    targetLanguage: {
+      type: String,
+      enum: Object.values(targetLanguage),
+      default: targetLanguage.AMHARIC,
+    },
   },
   { timestamps: true },
 );
