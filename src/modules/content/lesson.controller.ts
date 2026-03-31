@@ -35,6 +35,7 @@ export const createLesson = async (req: Request, res: Response) => {
     });
   }
 };
+
 export const getLessonsByTopic = async (req: Request, res: Response) => {
   try {
     const { topicId } = req.params;
@@ -104,3 +105,5 @@ export const toggleVerification = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+

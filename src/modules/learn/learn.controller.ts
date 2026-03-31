@@ -92,3 +92,15 @@ export const completeLesson = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getLessonsById = async (req:Request , res:Response) => {
+  try{
+    const {id} = req.params;
+    const lesson = await Lesson.findById(id);
+    if(!lesson) return  res.status(404).json({ message: "Lesson not found" });
+    res.status(200).json(lesson);
+  } catch (error) {
+    console.error("Error fetching lesson:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+}
