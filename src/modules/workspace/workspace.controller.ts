@@ -12,102 +12,121 @@ type AuthRequest = Request & {
   user?: { id: string };
 };
 
-export const getTopicWorkspace = async (
+export const getTopicsFeed = async (
   req: AuthRequest,
   res: Response
 ) => {
-  try {
-
-    const {id: topicId } = req.params;
+ try {
     const userId = req.user?.id;
 
-     if (typeof topicId !== "string" || !mongoose.Types.ObjectId.isValid(topicId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid topic id"
-      });
-    } 
+    // 1. Pagination Params
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 5; // Smaller limit is better for "Units"
+    const level = req.query.level as string;
+    const skip = (page - 1) * limit;
 
-    const topicObjectId = new mongoose.Types.ObjectId(topicId);
+    const filter: any = {};
+    if (level) filter.level = level;
 
-    const [
-      topic,
-      lessons,
-      dialogues,
-      writing
-    ] = await Promise.all([
+    // 2. Fetch Topics for this "chunk" of the infinite scroll
+    const topics = await Topic.find(filter)
+      .sort({ order: 1, createdAt: 1 }) // Ensure alphabetical or manual order
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-      Topic.findById(topicObjectId).lean(),
+    const topicIds = topics.map(t => t._id);
 
-      Lesson.find({ topicId: topicObjectId })
-        .select("_id order title")
-        .sort({ order: 1 })
-        .lean(),
+    // 3. Fetch ALL lessons belonging to these topics
+    const allLessons = await Lesson.find({
+      topicId: { $in: topicIds }
+    })
+      .select("_id topicId order title")
+      .sort({ order: 1 })
+      .lean();
 
-      Dialogue.find({ topicId: topicObjectId }).lean(),
-
-      WritingExercise.find({ topicId: topicObjectId }).lean()
-
-    ]);
-
-    if (!topic) {
-      return res.status(404).json({
-        success: false,
-        message: "Topic not found"
-      });
-    }
-
-    const lessonIds = lessons.map(l => l._id);
-
-    const progress = await Progress.find({
+    // 4. Fetch User Progress for these specific lessons
+    const lessonIds = allLessons.map(l => l._id);
+    const userProgress = await Progress.find({
       userId,
       lessonId: { $in: lessonIds }
-    }).lean();
+    })
+      .select("lessonId")
+      .lean();
 
     const completedLessonIds = new Set(
-      progress.map(p => p.lessonId.toString())
+      userProgress.map(p => p.lessonId.toString())
     );
 
-    const lessonsWithProgress = lessons.map(l => ({
-      ...l,
-      completed: completedLessonIds.has(l._id.toString())
-    }));
+    // 5. Group Lessons by Topic ID for easy mapping
+    const lessonsByTopic = new Map<string, any[]>();
+    allLessons.forEach(lesson => {
+      const tid = lesson.topicId.toString();
+      if (!lessonsByTopic.has(tid)) lessonsByTopic.set(tid, []);
+      lessonsByTopic.get(tid)!.push(lesson);
+    });
 
-    const completedLessons = lessonsWithProgress.filter(
-      l => l.completed
-    ).length;
+    // 6. Build the Final "Journey" Response
+    // We use a global "foundActive" flag to ensure only ONE lesson 
+    // across the entire feed is marked as 'active' (the current one to play).
+    let globalActiveFound = false;
 
+    const topicsWithPath = topics.map(topic => {
+      const topicLessons = lessonsByTopic.get(topic._id.toString()) || [];
+      
+      const processedLessons = topicLessons.map(l => {
+        const isCompleted = completedLessonIds.has(l._id.toString());
+        let status = "locked";
+
+        if (isCompleted) {
+          status = "completed";
+        } else if (!globalActiveFound) {
+          status = "active";
+          globalActiveFound = true; // All subsequent lessons in all topics stay 'locked'
+        }
+
+        return {
+          _id: l._id,
+          title: l.title,
+          status
+        };
+      });
+
+      const total = topicLessons.length;
+      const completedCount = processedLessons.filter(l => l.status === "completed").length;
+
+      return {
+        _id: topic._id,
+        title: topic.title,
+        level: topic.level,
+        lessons: processedLessons,
+        progress: {
+          completedLessons: completedCount,
+          totalLessons: total,
+          percentage: total > 0 ? Math.round((completedCount / total) * 100) : 0
+        },
+        isCompleted: total > 0 && completedCount === total
+      };
+    });
+
+    // 7. Return with Pagination Metadata
     return res.json({
       success: true,
       data: {
-
-        topic: {
-          _id: topic._id,
-          title: topic.title
-        },
-
-        lessons: lessonsWithProgress,
-
-        dialogues,
-
-        writing,
-
-        progress: {
-          completedLessons,
-          totalLessons: lessons.length
+        topics: topicsWithPath,
+        pagination: {
+          currentPage: page,
+          hasMore: topics.length === limit,
+          nextPage: topics.length === limit ? page + 1 : null
         }
-
       }
     });
 
   } catch (error) {
-
-    console.error(error);
-
+    console.error("Feed Error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to load topic workspace"
+      message: "Failed to generate learning feed"
     });
-
   }
 };

@@ -11,7 +11,7 @@ import studyRoutes from "./modules/study/study.routes";
 import learnRoutes from "./modules/learn/learn.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import leaderboardRoutes from "./modules/leaderboard/leaderboard.routes";
-
+import workspaceRoutes from "./modules/workspace/workspace.routes";
 dotenv.config();
 connectDB();
 
@@ -27,7 +27,7 @@ app.use("/api/topics", topicRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/study", studyRoutes);
 app.use("/api/learn", learnRoutes);
-
+app.use("/api/workspace",workspaceRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 
