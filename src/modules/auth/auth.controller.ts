@@ -35,7 +35,8 @@ export const register = async (req: Request, res: Response) => {
 
     res.status(201).json({ id: user._id, username: user.username });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Register Error:", error);
+    res.status(500).json({ message: "Server error", error: error instanceof Error ? error.message : String(error) });
   }
 };
 
@@ -57,13 +58,13 @@ export const login = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "User banned" });
 
     const token = generateToken({
-      id: user._id,
+      id: user._id.toString(),
       role: user.role,
     });
 
-    res.json({ token });
+    res.json({ token, id: user._id.toString(), username: user.username });
   } catch (error) {
     console.error("Login error:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error instanceof Error ? error.message : String(error) });
   }
 };

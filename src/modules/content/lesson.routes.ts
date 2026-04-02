@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createLesson, deleteLesson, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
+import { backfillLessonAudio, createLesson, deleteLesson, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";
 
 const router = Router();
@@ -31,5 +31,6 @@ router.patch(
   toggleVerification
 );
 router.get("/topic/:topicId", getLessonsByTopic);
+router.post("/:lessonId/generate-audio", backfillLessonAudio);
 
 export default router;
