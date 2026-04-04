@@ -45,6 +45,14 @@ export const getTopicsFeed = async (
       .sort({ order: 1 })
       .lean();
 
+    // 3.1 Fetch dialogues for these topics (id + title-like localized text)
+    const allDialogues = await Dialogue.find({
+      topicId: { $in: topicIds }
+    })
+      .select("_id topicId scenario")
+      .sort({ createdAt: 1 })
+      .lean();
+
     // 4. Fetch User Progress for these specific lessons
     const lessonIds = allLessons.map(l => l._id);
     const userProgress = await Progress.find({
@@ -66,6 +74,14 @@ export const getTopicsFeed = async (
       lessonsByTopic.get(tid)!.push(lesson);
     });
 
+    // 5.1 Group Dialogues by Topic ID
+    const dialoguesByTopic = new Map<string, any[]>();
+    allDialogues.forEach((dialogue: any) => {
+      const tid = dialogue.topicId.toString();
+      if (!dialoguesByTopic.has(tid)) dialoguesByTopic.set(tid, []);
+      dialoguesByTopic.get(tid)!.push(dialogue);
+    });
+
     // 6. Build the Final "Journey" Response
     // We use a global "foundActive" flag to ensure only ONE lesson 
     // across the entire feed is marked as 'active' (the current one to play).
@@ -73,6 +89,7 @@ export const getTopicsFeed = async (
 
     const topicsWithPath = topics.map(topic => {
       const topicLessons = lessonsByTopic.get(topic._id.toString()) || [];
+      const topicDialogues = dialoguesByTopic.get(topic._id.toString()) || [];
       
       const processedLessons = topicLessons.map(l => {
         const isCompleted = completedLessonIds.has(l._id.toString());
@@ -92,6 +109,11 @@ export const getTopicsFeed = async (
         };
       });
 
+      const processedDialogues = topicDialogues.map((d: any) => ({
+        _id: d._id,
+        title: d.scenario,
+      }));
+
       const total = topicLessons.length;
       const completedCount = processedLessons.filter(l => l.status === "completed").length;
 
@@ -100,6 +122,7 @@ export const getTopicsFeed = async (
         title: topic.title,
         level: topic.level,
         lessons: processedLessons,
+        dialogues: processedDialogues,
         progress: {
           completedLessons: completedCount,
           totalLessons: total,

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { backfillLessonAudio, createLesson, deleteLesson, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
-import { authenticate, checkRole } from "../../middleware/auth.middleware";
+import { createLesson, deleteLesson, resumeLessonAudioGeneration, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
+import { authenticate, checkRole } from "../../middleware/auth.middleware";     
 
 const router = Router();
 
@@ -17,6 +17,8 @@ router.put(
   updateLesson
 );
 
+// Assuming this is in your lesson.routes.ts file
+router.put("/:id/generate-audio", resumeLessonAudioGeneration);
 router.delete(
   "/:id",
   authenticate,
@@ -31,6 +33,5 @@ router.patch(
   toggleVerification
 );
 router.get("/topic/:topicId", getLessonsByTopic);
-router.post("/:lessonId/generate-audio", backfillLessonAudio);
 
 export default router;

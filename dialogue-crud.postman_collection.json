@@ -1,0 +1,146 @@
+{
+  "info": {
+    "name": "BLLP Dialogue CRUD",
+    "description": "Postman collection for testing Dialogue CRUD APIs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Dialogue",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"topicId\": \"{{topicId}}\",\n  \"scenario\": {\n    \"am\": \"በገበያ ቦታ ውስጥ እየተገናኙ ያሉ ሁለት ጓደኞች\",\n    \"ao\": \"Hiriyoonni lama gabaa keessatti wal argan\"\n  },\n  \"characters\": [\n    {\n      \"characterId\": \"c1\",\n      \"name\": \"Abebe\",\n      \"avatarUrl\": \"https://example.com/avatars/abebe.png\"\n    },\n    {\n      \"characterId\": \"c2\",\n      \"name\": \"Lensa\",\n      \"avatarUrl\": \"https://example.com/avatars/lensa.png\"\n    }\n  ],\n  \"lines\": [\n    {\n      \"order\": 1,\n      \"characterId\": \"c1\",\n      \"content\": {\n        \"am\": \"ሰላም ሌንሳ!\",\n        \"ao\": \"Akkam Lensa!\"\n      },\n      \"isInteractive\": false\n    },\n    {\n      \"order\": 2,\n      \"characterId\": \"c2\",\n      \"content\": {\n        \"am\": \"ሰላም አበበ፣ ደህና ነህ?\",\n        \"ao\": \"Akkam Abebe, nagaan jirtaa?\"\n      },\n      \"isInteractive\": true,\n      \"question\": {\n        \"am\": \"አበበ ምን ሊመልስ ይችላል?\",\n        \"ao\": \"Abeben maal deebisuu danda'a?\"\n      },\n      \"options\": [\n        {\n          \"am\": \"ደህና ነኝ\",\n          \"ao\": \"Nagaan jira\"\n        },\n        {\n          \"am\": \"አልቻልኩም\",\n          \"ao\": \"Hin dandeenye\"\n        },\n        {\n          \"am\": \"ነገ እንገናኝ\",\n          \"ao\": \"Boru wal haa arginu\"\n        }\n      ],\n      \"correctAnswerIndex\": 0\n    }\n  ],\n  \"level\": \"BEGINNER\",\n  \"isVerified\": false\n}"
+        },
+        "url": "{{baseUrl}}/api/dialogues"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create dialogue returns 201 or 200', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              "",
+              "try {",
+              "  const body = pm.response.json();",
+              "  if (body && body._id) {",
+              "    pm.collectionVariables.set('dialogueId', body._id);",
+              "  }",
+              "} catch (e) {}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Get All Dialogues",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/dialogues"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Dialogues By Topic",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/dialogues/topic/{{topicId}}"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Dialogue By Id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/dialogues/{{dialogueId}}"
+      },
+      "response": []
+    },
+    {
+      "name": "Update Dialogue",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"scenario\": {\n    \"am\": \"በገበያ ቦታ ውስጥ እየተገናኙ ያሉ ሁለት ጓደኞች (ተሻሽሏል)\",\n    \"ao\": \"Hiriyoonni lama gabaa keessatti wal argan (fooyya'e)\"\n  },\n  \"lines\": [\n    {\n      \"order\": 1,\n      \"characterId\": \"c1\",\n      \"content\": {\n        \"am\": \"ሰላም ሌንሳ! እንዴት ነሽ?\",\n        \"ao\": \"Akkam Lensa! Akkam jirta?\"\n      },\n      \"isInteractive\": false\n    },\n    {\n      \"order\": 2,\n      \"characterId\": \"c2\",\n      \"content\": {\n        \"am\": \"ደህና ነኝ፣ አንተስ?\",\n        \"ao\": \"Nagaan jira, ati hoo?\"\n      },\n      \"isInteractive\": false\n    }\n  ],\n  \"level\": \"BEGINNER\"\n}"
+        },
+        "url": "{{baseUrl}}/api/dialogues/{{dialogueId}}"
+      },
+      "response": []
+    },
+    {
+      "name": "Toggle Dialogue Verification",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/dialogues/{{dialogueId}}/verify"
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Dialogue",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/dialogues/{{dialogueId}}"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "topicId",
+      "value": ""
+    },
+    {
+      "key": "dialogueId",
+      "value": ""
+    }
+  ]
+}

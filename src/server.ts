@@ -13,6 +13,8 @@ import learnRoutes from "./modules/learn/learn.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import leaderboardRoutes from "./modules/leaderboard/leaderboard.routes";
 import workspaceRoutes from "./modules/workspace/workspace.routes";
+import dialogueRoutes from "./modules/dialogue/dialogue.routes";
+import writingRoutes from "./modules/writtingExercise/writtingExercise.routes";
 import { v2 as cloudinary } from 'cloudinary';
 
 
@@ -43,10 +45,11 @@ app.use("/api/topics", topicRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/study", studyRoutes);
 app.use("/api/learn", learnRoutes);
+app.use("/api/dialogues", dialogueRoutes);
 app.use("/api/workspace",workspaceRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
-
+app.use("/api/writing",writingRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");

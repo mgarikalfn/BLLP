@@ -1,73 +1,80 @@
-import axios from "axios";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
 import path from "path";
 
-export class AudioService {
-  /**
-   * Generates audio from Addis AI using the official X-API-Key header format.
-   */
-  static async generateAndUpload(
-    text: string, 
-    language: "am" | "om"
-  ): Promise<string | null> {
+export class GeminiAudioService {
+  private genAI: GoogleGenerativeAI;
+  private model: any;
+  private uploadDir: string;
+
+  constructor() {
+    const apiKey =  "AIzaSyCU8UBfM-YqqywQS8tHjWogFDDpd1HbK9Q" 
+    //"AIzaSyDYW9kxlAT-STi1duR6cU_TLsJI4S8rDDg";
+    this.genAI = new GoogleGenerativeAI(apiKey);
+    
+    this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
+    
+    // FIX: Match the actual return path by adding "vocabulary" to the directory creation
+    this.uploadDir = path.join(process.cwd(), "public", "uploads", "vocabulary");
+    if (!fs.existsSync(this.uploadDir)) {
+      fs.mkdirSync(this.uploadDir, { recursive: true });
+    }
+  }
+
+  async generateLessonAudio(text: string, language: 'amharic' | 'oromo'): Promise<string> {
     try {
-      const apiKey = process.env.ADDIS_AI_API_KEY; // Ensure this starts with 'sk_'
-      
-      if (!apiKey) {
-        console.error("❌ ADDIS_AI_API_KEY is missing from .env");
-        return null;
-      }
+      const pronunciationHints = language === 'oromo' 
+        ? "Ensure the double consonants like 'tt' and the implosive 'dh' are distinct and clear." 
+        : "Ensure the Ge'ez glottal stops and rhythm are natural.";
 
-      console.log(`\n⏳ Requesting Addis AI: "${text}"...`);
+      const prompt = `Please say the following ${language} phrase clearly for a language learning app. ${pronunciationHints} Phrase: "${text}"`;
 
-      const response = await axios.post(
-        "https://api.addisassistant.com/api/v1/audio", 
-        {
-          text: text,
-          language: language,
-          voice_id: "female_1" // You can change this to "female_1" if available
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": apiKey // Official header format
-          }
-        }
+      const result = await this.model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
+        } as any
+      });
+
+      const response = await result.response;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(
+        (part: any) => part.inlineData && part.inlineData.mimeType.startsWith("audio/")
       );
 
-      // CRITICAL: The doc says the field is 'audio', not 'audio_base64'
-      const base64Data = response.data.audio;
-      
-      if (!base64Data) {
-        console.error("❌ API Success, but no 'audio' field found. Data received:", response.data);
-        return null;
-      }
+      if (!audioPart?.inlineData) throw new Error("API responded but no audio data was returned.");
 
-      const buffer = Buffer.from(base64Data, "base64");
+      const pcmBuffer = Buffer.from(audioPart.inlineData.data, "base64");
+      const wavBuffer = this.addWavHeader(pcmBuffer, 24000); 
 
-      // Set up the local path
-      const uploadsDir = path.join(__dirname, "../../public/uploads");
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
+      const fileName = `${language}_${Date.now()}.wav`;
+      const filePath = path.join(this.uploadDir, fileName);
+      fs.writeFileSync(filePath, wavBuffer);
 
-      const fileName = `audio_${Date.now()}.wav`;
-      const filePath = path.join(uploadsDir, fileName);
-
-      fs.writeFileSync(filePath, buffer);
-      
-      console.log(`✅ Success! File saved: ${fileName}`);
-      return `/uploads/${fileName}`;
+      return `/uploads/vocabulary/${fileName}`;
 
     } catch (error: any) {
-      console.error(`\n❌ Addis AI Error:`);
-      if (error.response) {
-        console.error(`   Status: ${error.response.status}`);
-        console.error(`   Body:`, error.response.data);
-      } else {
-        console.error(`   Message: ${error.message}`);
-      }
-      return null;
+      // FIX: Throw the error so the controller knows it failed!
+      console.error(`❌ [GeminiAudioService] Error:`, error.message);
+      throw error; 
     }
+  }
+
+  private addWavHeader(pcmBuffer: Buffer, sampleRate: number): Buffer {
+    const header = Buffer.alloc(44);
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + pcmBuffer.length, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20);
+    header.writeUInt16LE(1, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(sampleRate * 2, 28);
+    header.writeUInt16LE(2, 32);
+    header.writeUInt16LE(16, 34);
+    header.write('data', 36);
+    header.writeUInt32LE(pcmBuffer.length, 40);
+    return Buffer.concat([header, pcmBuffer]);
   }
 }

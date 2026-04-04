@@ -1,45 +1,91 @@
 import { Request, Response } from "express";
 import { WritingExercise } from "./writingExercise.model";
 import { WritingAttempt } from "./WritingAttempt.model";
-// Import your Progress model/service here to update XP/SM-2 stats
+import { WritingEvaluationService } from "./writingEvaluation.service";
 
 export const submitWritingExercise = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id; // From auth middleware
+    const userId = (req as any).user.id;
     const { exerciseId, topicId, submittedText, targetLanguage } = req.body;
 
-    // 1. Fetch the original exercise to get the sample answer
     const exercise = await WritingExercise.findById(exerciseId);
     if (!exercise) {
       return res.status(404).json({ success: false, message: "Exercise not found." });
     }
 
-    // 2. Save the user's attempt
+    // 1. Run the Evaluation
+    let evaluation;
+    if (exercise.type === "TRANSLATION") {
+      const sample = exercise.sampleAnswer[targetLanguage as "am" | "ao"];
+      evaluation = WritingEvaluationService.evaluateTranslation(submittedText, sample);
+    } else {
+      evaluation = await WritingEvaluationService.evaluateOpenPrompt(submittedText, targetLanguage);
+    }
+
+    // 2. Save the Attempt (Including the evaluation results)
     const newAttempt = await WritingAttempt.create({
       userId,
       exerciseId,
       topicId,
       submittedText,
       targetLanguage,
+      isCompleted: evaluation.isCorrect,
+      // Pro-tip: Add a 'feedback' field to your WritingAttempt model to save this!
     });
 
-    // 3. (Optional but recommended) Trigger your Progress/SM-2 logic here
-    // await ProgressService.markComplete(userId, topicId, 'WRITING');
-    // await UserService.addXP(userId, 10);
-
-    // 4. Return success along with the sample answer for immediate UI feedback
-    res.status(200).json({
+    // 3. Return a Rich Response
+    return res.status(200).json({
       success: true,
-      message: "Writing exercise submitted successfully.",
       data: {
+        isCorrect: evaluation.isCorrect,
+        status: evaluation.status || "EVALUATED",
+        feedback: evaluation.feedback,
+        sampleAnswer: exercise.sampleAnswer[targetLanguage as "am" | "ao"],
         attemptId: newAttempt._id,
-        sampleAnswer: exercise.sampleAnswer,
-        // Later, you can inject AI feedback here:
-        // aiFeedback: "Great job! Watch your spelling on..."
       },
     });
   } catch (error) {
-    console.error("Submit Writing Error:", error);
+    console.error("Controller Error:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+export const createWritingExercise = async (req: Request, res: Response) => {
+  try {
+    const { topicId, type, prompt, hints, sampleAnswer, level } = req.body;
+
+    // 1. Basic validation: Ensure required fields exist
+    if (!topicId || !prompt?.am || !prompt?.ao || !sampleAnswer?.am || !sampleAnswer?.ao) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: topicId, prompt (am/ao), or sampleAnswer (am/ao).",
+      });
+    }
+
+    // 2. Create the document
+    const newExercise = await WritingExercise.create({
+      topicId,
+      type,
+      prompt,
+      hints,
+      sampleAnswer,
+      level,
+      isVerified: true, // Since an admin is adding this, we can auto-verify
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Writing exercise created successfully.",
+      data: newExercise,
+    });
+  } catch (error: any) {
+    console.error("Create Exercise Error:", error);
+    
+    // Handle Mongoose CastErrors (e.g., invalid ObjectId)
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid Topic ID format." });
+    }
+
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };

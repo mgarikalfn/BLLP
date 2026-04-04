@@ -11,8 +11,18 @@ export interface ILesson extends Document {
   vocabulary: Array<{
     am: string;
     ao: string;
-    audioUrl?: string; // For pronunciation
-    example?: { am: string; ao: string }; // Context helps memory
+    audioUrl?: {
+      am?: string;
+      ao?: string;
+    }; // For pronunciation
+    example?: { 
+      am: string; 
+      ao: string; 
+      audioUrl?: {
+        am?: string;
+        ao?: string;
+      };
+    }; // Context helps memory
   }>;
   // 2. ASSESSMENT (The "Gatekeeper")
   quiz: Array<{
@@ -35,10 +45,17 @@ const lessonSchema = new Schema<ILesson>(
       {
         am: { type: String, required: true },
         ao: { type: String, required: true },
-        audioUrl: { type: String },
+        audioUrl: {
+          am: { type: String },
+          ao: { type: String },
+        },
         example: {
           am: { type: String },
           ao: { type: String },
+          audioUrl: {
+            am: { type: String },
+            ao: { type: String },
+          },
         },
       },
     ],

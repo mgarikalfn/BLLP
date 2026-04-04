@@ -1,13 +1,54 @@
 import { Request, Response } from "express";
 import { Lesson } from "./lesson.model";
-import { AudioService } from "../../services/audio.services";
+import { GeminiAudioService } from "../../services/audio.services";
+
+// Helper to pause execution
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const audioService = new GeminiAudioService();
 
 export const createLesson = async (req: Request, res: Response) => {
   try {
     const { topicId, order, title, vocabulary, quiz, isVerified } = req.body;
 
-    // Log the incoming data to verify what Postman is sending
-    // console.log("Incoming Lesson Data:", JSON.stringify(req.body, null, 2));
+    // Generate audio for vocabulary and examples
+    if (vocabulary && Array.isArray(vocabulary)) {
+      for (const vocab of vocabulary) {
+        if (!vocab.audioUrl) vocab.audioUrl = {};
+        if (vocab.am && !vocab.audioUrl.am) {
+          try {
+            const amUrl = await audioService.generateLessonAudio(vocab.am, "amharic");
+            if (amUrl) vocab.audioUrl.am = amUrl;
+            await sleep(2000);
+          } catch(e) { console.error("Error generating amharic vocab audio"); }
+        }
+        if (vocab.ao && !vocab.audioUrl.ao) {
+          try {
+            const aoUrl = await audioService.generateLessonAudio(vocab.ao, "oromo");
+            if (aoUrl) vocab.audioUrl.ao = aoUrl;
+            await sleep(2000);
+          } catch(e) { console.error("Error generating oromo vocab audio"); }
+        }
+        
+        if (vocab.example) {
+          if (!vocab.example.audioUrl) vocab.example.audioUrl = {};
+          if (vocab.example.am && !vocab.example.audioUrl.am) {
+            try {
+              const exAmUrl = await audioService.generateLessonAudio(vocab.example.am, "amharic");
+              if (exAmUrl) vocab.example.audioUrl.am = exAmUrl;
+              await sleep(2000);
+            } catch(e) { console.error("Error generating amharic example audio"); }
+          }
+          if (vocab.example.ao && !vocab.example.audioUrl.ao) {
+            try {
+              const exAoUrl = await audioService.generateLessonAudio(vocab.example.ao, "oromo");
+              if (exAoUrl) vocab.example.audioUrl.ao = exAoUrl;
+              await sleep(2000);
+            } catch(e) { console.error("Error generating oromo example audio"); }
+          }
+        }
+      }
+    }
 
     const lesson = await Lesson.create({
       topicId,
@@ -63,16 +104,148 @@ export const updateLesson = async (req: Request, res: Response) => {
     const lesson = await Lesson.findById(id);
     if (!lesson) return res.status(404).json({ message: "Lesson not found" });
 
-    Object.assign(lesson, req.body);
+    const updatedData = req.body;
+
+    // Never override MongoDB specific keys manually to avoid VersionErrors
+    delete updatedData._id;
+    delete updatedData.__v;
+    delete updatedData.createdAt;
+    delete updatedData.updatedAt;
+
+    Object.assign(lesson, updatedData);
 
     await lesson.save();
 
-    res.json(lesson);
+    return res.json(lesson);
   } catch (error: any) {
+    console.error("CRITICAL LESSON UPDATE ERROR:", error);
     if (error.code === 11000) {
-      return res.status(400).json({ message: "Duplicate lesson order" });
+      return res.status(400).json({ message: "Duplicate lesson order", error: error.keyValue });
     }
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ 
+      message: "Server error", 
+      details: error.message || error.toString() 
+    });
+  }
+};
+
+export const resumeLessonAudioGeneration = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const lesson = await Lesson.findById(id);
+    if (!lesson || !lesson.vocabulary || !Array.isArray(lesson.vocabulary)) {
+      return res.status(404).json({ message: "Lesson or vocabulary not found" });
+    }
+
+    let generatedCount = 0;
+    let attemptedCount = 0;
+
+    // Loop through all vocabulary items
+    for (let i = 0; i < lesson.vocabulary.length; i++) {
+      const vocab: any = lesson.vocabulary[i];
+
+      if (!vocab.audioUrl) vocab.audioUrl = {};
+      if (vocab.example && !vocab.example.audioUrl) vocab.example.audioUrl = {};
+
+      try {
+        // --- 1. Amharic & Oromo Vocab Audio ---
+        if (vocab.am && !vocab.audioUrl.am) {
+          attemptedCount++;
+          try {
+            console.log(`Generating Amharic vocab audio for: ${vocab.am}`);
+            vocab.audioUrl.am = await audioService.generateLessonAudio(vocab.am, "amharic");
+            generatedCount++;
+            lesson.markModified(`vocabulary`);
+            await lesson.save();
+            await sleep(3000); // ⏱️ Wait 3 seconds to avoid rate limits
+          } catch (e: any) {
+            console.error("Failed on am", e.message);
+            if (e.message?.includes("429") || e.message?.includes("Too Many Requests")) {
+              console.log("⚠️ Hit API rate limit. Automatically sleeping for 35 seconds to cool down...");
+              await sleep(35000);
+            }
+          }
+        }
+        
+        if (vocab.ao && !vocab.audioUrl.ao) {
+          attemptedCount++;
+          try {
+            console.log(`Generating Oromo vocab audio for: ${vocab.ao}`);
+            vocab.audioUrl.ao = await audioService.generateLessonAudio(vocab.ao, "oromo");
+            generatedCount++;
+            lesson.markModified(`vocabulary`);
+            await lesson.save();
+            await sleep(3000); // ⏱️ Wait 3 seconds
+          } catch (e: any) {
+            console.error("Failed on ao", e.message);
+            if (e.message?.includes("429") || e.message?.includes("Too Many Requests")) {
+              console.log("⚠️ Hit API rate limit. Automatically sleeping for 35 seconds to cool down...");
+              await sleep(35000);
+            }
+          }
+        }
+
+        // --- 2. Example Sentence Audio ---
+        if (vocab.example) {
+          if (vocab.example.am && !vocab.example.audioUrl.am) {
+            attemptedCount++;
+            try {
+              console.log(`Generating Amharic example audio for: ${vocab.example.am}`);
+              vocab.example.audioUrl.am = await audioService.generateLessonAudio(vocab.example.am, "amharic");
+              generatedCount++;
+              lesson.markModified(`vocabulary`);
+              await lesson.save();
+              await sleep(3000); // ⏱️ Wait 3 seconds
+            } catch (e: any) {
+              console.error("Failed on example am", e.message);
+              if (e.message?.includes("429") || e.message?.includes("Too Many Requests")) {
+                console.log("⚠️ Hit API rate limit. Automatically sleeping for 35 seconds to cool down...");
+                await sleep(35000);
+              }
+            }
+          }
+          
+          if (vocab.example.ao && !vocab.example.audioUrl.ao) {
+            attemptedCount++;
+            try {
+              console.log(`Generating Oromo example audio for: ${vocab.example.ao}`);
+              vocab.example.audioUrl.ao = await audioService.generateLessonAudio(vocab.example.ao, "oromo");
+              generatedCount++;
+              lesson.markModified(`vocabulary`);
+              await lesson.save();
+              await sleep(3000); // ⏱️ Wait 3 seconds
+            } catch (e: any) {
+              console.error("Failed on example ao", e.message);
+              if (e.message?.includes("429") || e.message?.includes("Too Many Requests")) {
+                console.log("⚠️ Hit API rate limit. Automatically sleeping for 35 seconds to cool down...");
+                await sleep(35000);
+              }
+            }
+          }
+        }
+      } catch (vocabError: any) {
+        console.error(`⚠️ API Error structure for vocab ${i}:`, vocabError.message);
+      }
+    }
+
+    if (generatedCount === 0 && attemptedCount > 0) {
+      return res.status(502).json({ message: "API Failure", details: "API responded but no audio data was returned or limits reached." });
+    }
+
+    if (attemptedCount === 0) {
+       return res.json({ success: true, message: "No new audio needed. Lesson is fully generated.", data: lesson });
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully resumed & generated ${generatedCount} new audio files.`,
+      data: lesson
+    });
+
+  } catch (error: any) {
+    console.error("CRITICAL ERROR:", error);
+    return res.status(500).json({ message: "Server error", details: error.message });
   }
 };
 
@@ -104,48 +277,5 @@ export const toggleVerification = async (req: Request, res: Response) => {
     res.json({ message: "Verification status updated", isVerified: lesson.isVerified });
   } catch {
     res.status(500).json({ message: "Server error" });
-  }
-};
-
-
-
-export const backfillLessonAudio = async (req: Request, res: Response) => {
-  try {
-    const { lessonId } = req.params;
-
-    // 1. Find the existing lesson
-    const lesson = await Lesson.findById(lessonId);
-    if (!lesson) {
-      return res.status(404).json({ message: "Lesson not found" });
-    }
-
-    let generatedCount = 0;
-
-    // 2. Loop through the vocabulary array
-    // We use a simple for...of loop so we don't spam the Addis AI API concurrently
-    for (let i = 0; i < lesson.vocabulary.length; i++) {
-      const vocab = lesson.vocabulary[i];
-
-      // Check if audio is missing (assuming Afan Oromo is target language based on variable names)
-      if (!vocab.audioUrl && vocab.am) {
-        const aoUrl = await AudioService.generateAndUpload(vocab.ao, "am"); // Addis AI uses 'om' for Oromo
-        if (aoUrl) {
-          lesson.vocabulary[i].audioUrl = aoUrl;
-          generatedCount++;
-        }
-      }
-    }
-
-    // 3. Save the updated lesson to MongoDB
-    await lesson.save();
-
-    return res.json({
-      success: true,
-      message: `Audio backfill complete. Generated ${generatedCount} new audio files.`,
-      data: lesson,
-    });
-  } catch (error) {
-    console.error("Backfill Error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
