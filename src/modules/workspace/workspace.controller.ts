@@ -53,6 +53,14 @@ export const getTopicsFeed = async (
       .sort({ createdAt: 1 })
       .lean();
 
+    // 3.2 Fetch writing exercises for these topics
+    const allWritingExercises = await WritingExercise.find({
+      topicId: { $in: topicIds }
+    })
+      .select("_id topicId type prompt")
+      .sort({ createdAt: 1 })
+      .lean();
+
     // 4. Fetch User Progress for these specific lessons
     const lessonIds = allLessons.map(l => l._id);
     const userProgress = await Progress.find({
@@ -82,6 +90,14 @@ export const getTopicsFeed = async (
       dialoguesByTopic.get(tid)!.push(dialogue);
     });
 
+    // 5.2 Group Writing Exercises by Topic ID
+    const writingExercisesByTopic = new Map<string, any[]>();
+    allWritingExercises.forEach((exercise: any) => {
+      const tid = exercise.topicId.toString();
+      if (!writingExercisesByTopic.has(tid)) writingExercisesByTopic.set(tid, []);
+      writingExercisesByTopic.get(tid)!.push(exercise);
+    });
+
     // 6. Build the Final "Journey" Response
     // We use a global "foundActive" flag to ensure only ONE lesson 
     // across the entire feed is marked as 'active' (the current one to play).
@@ -90,6 +106,7 @@ export const getTopicsFeed = async (
     const topicsWithPath = topics.map(topic => {
       const topicLessons = lessonsByTopic.get(topic._id.toString()) || [];
       const topicDialogues = dialoguesByTopic.get(topic._id.toString()) || [];
+      const topicWritingExercises = writingExercisesByTopic.get(topic._id.toString()) || [];
       
       const processedLessons = topicLessons.map(l => {
         const isCompleted = completedLessonIds.has(l._id.toString());
@@ -114,6 +131,11 @@ export const getTopicsFeed = async (
         title: d.scenario,
       }));
 
+      const processedWritingExercises = topicWritingExercises.map((e: any) => ({
+        _id: e._id,
+        title: e.prompt ? (e.prompt.am || e.prompt.ao || e.type) : e.type, 
+      }));
+
       const total = topicLessons.length;
       const completedCount = processedLessons.filter(l => l.status === "completed").length;
 
@@ -123,6 +145,7 @@ export const getTopicsFeed = async (
         level: topic.level,
         lessons: processedLessons,
         dialogues: processedDialogues,
+        writingExercises: processedWritingExercises,
         progress: {
           completedLessons: completedCount,
           totalLessons: total,

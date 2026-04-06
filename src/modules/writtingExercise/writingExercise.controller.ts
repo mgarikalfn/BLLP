@@ -89,3 +89,25 @@ export const createWritingExercise = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
+
+export const getWritingExerciseById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const exercise = await WritingExercise.findById(id);
+
+    if (!exercise) {
+      return res.status(404).json({ success: false, message: "Exercise not found." });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: exercise,
+    });
+  } catch (error: any) {
+    console.error("Get Exercise Error:", error);
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid Exercise ID format." });
+    }
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
