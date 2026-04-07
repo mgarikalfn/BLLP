@@ -4,6 +4,7 @@ import { Topic } from "../content/topic.model";
 import { Lesson } from "../content/lesson.model";
 import { Dialogue } from "../dialogue/dialogue.model";
 import { WritingExercise } from "../writtingExercise/writingExercise.model";
+import { SpeakingExercise } from "../speaking/speakingExercise.model";
 import { Progress } from "../study/progress.model";
 
 
@@ -61,6 +62,14 @@ export const getTopicsFeed = async (
       .sort({ createdAt: 1 })
       .lean();
 
+    // 3.3 Fetch speaking exercises for these topics
+    const allSpeakingExercises = await SpeakingExercise.find({
+      topicId: { $in: topicIds }
+    })
+      .select("_id topicId prompt expectedText")
+      .sort({ createdAt: 1 })
+      .lean();
+
     // 4. Fetch User Progress for these specific lessons
     const lessonIds = allLessons.map(l => l._id);
     const userProgress = await Progress.find({
@@ -98,6 +107,14 @@ export const getTopicsFeed = async (
       writingExercisesByTopic.get(tid)!.push(exercise);
     });
 
+    // 5.3 Group Speaking Exercises by Topic ID
+    const speakingExercisesByTopic = new Map<string, any[]>();
+    allSpeakingExercises.forEach((exercise: any) => {
+      const tid = exercise.topicId.toString();
+      if (!speakingExercisesByTopic.has(tid)) speakingExercisesByTopic.set(tid, []);
+      speakingExercisesByTopic.get(tid)!.push(exercise);
+    });
+
     // 6. Build the Final "Journey" Response
     // We use a global "foundActive" flag to ensure only ONE lesson 
     // across the entire feed is marked as 'active' (the current one to play).
@@ -107,6 +124,7 @@ export const getTopicsFeed = async (
       const topicLessons = lessonsByTopic.get(topic._id.toString()) || [];
       const topicDialogues = dialoguesByTopic.get(topic._id.toString()) || [];
       const topicWritingExercises = writingExercisesByTopic.get(topic._id.toString()) || [];
+      const topicSpeakingExercises = speakingExercisesByTopic.get(topic._id.toString()) || [];
       
       const processedLessons = topicLessons.map(l => {
         const isCompleted = completedLessonIds.has(l._id.toString());
@@ -136,6 +154,11 @@ export const getTopicsFeed = async (
         title: e.prompt ? (e.prompt.am || e.prompt.ao || e.type) : e.type, 
       }));
 
+      const processedSpeakingExercises = topicSpeakingExercises.map((e: any) => ({
+        _id: e._id,
+        title: e.prompt ? (e.prompt.am || e.prompt.ao) : (e.expectedText?.am || e.expectedText?.ao || "Speaking Exercise"),
+      }));
+
       const total = topicLessons.length;
       const completedCount = processedLessons.filter(l => l.status === "completed").length;
 
@@ -146,6 +169,7 @@ export const getTopicsFeed = async (
         lessons: processedLessons,
         dialogues: processedDialogues,
         writingExercises: processedWritingExercises,
+        speakingExercises: processedSpeakingExercises,
         progress: {
           completedLessons: completedCount,
           totalLessons: total,

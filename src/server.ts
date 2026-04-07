@@ -15,6 +15,7 @@ import leaderboardRoutes from "./modules/leaderboard/leaderboard.routes";
 import workspaceRoutes from "./modules/workspace/workspace.routes";
 import dialogueRoutes from "./modules/dialogue/dialogue.routes";
 import writingRoutes from "./modules/writtingExercise/writtingExercise.routes";
+import speakingRoutes from "./modules/speaking/speaking.routes";
 import { v2 as cloudinary } from 'cloudinary';
 
 
@@ -50,6 +51,7 @@ app.use("/api/workspace",workspaceRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/writing",writingRoutes);
+app.use("/api/speaking", speakingRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");
