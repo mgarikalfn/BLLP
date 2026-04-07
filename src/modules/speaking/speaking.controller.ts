@@ -61,7 +61,12 @@ const submitResponseMessages = {
   },
 } as const;
 
-const resolveSubmitLanguage = (value: unknown): "am" | "ao" => (value === "ao" ? "ao" : "am");
+// Learner-facing messages should be in the native language (opposite of target language).
+const resolveNativeLanguageFromTarget = (value: unknown): "am" | "ao" => {
+  if (value === "ao") return "am";
+  if (value === "am") return "ao";
+  return "am";
+};
 
 export const createSpeakingExercise = async (req: Request, res: Response) => {
   try {
@@ -257,7 +262,7 @@ export const submitSpeakingExercise = async (req: Request, res: Response) => {
   try {
     const file = (req as any).file;
     const { expectedText, targetLang, exerciseId } = req.body;
-    const responseLang = resolveSubmitLanguage(targetLang);
+    const responseLang = resolveNativeLanguageFromTarget(targetLang);
     const messages = submitResponseMessages[responseLang];
 
     // 1. Validation
@@ -336,7 +341,7 @@ export const submitSpeakingExercise = async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error("Speaking Controller Error:", error);
-    const errorLang = resolveSubmitLanguage((req.body as { targetLang?: unknown })?.targetLang);
+    const errorLang = resolveNativeLanguageFromTarget((req.body as { targetLang?: unknown })?.targetLang);
     return res.status(500).json({ success: false, message: submitResponseMessages[errorLang].serverError });
   }
 };

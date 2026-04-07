@@ -16,7 +16,8 @@ export class SpeakingEvaluationService {
     targetLanguage: "am" | "ao"
   ) {
     const languageName = targetLanguage === "am" ? "Amharic" : "Afan Oromo";
-    const feedbackLanguage = targetLanguage === "am" ? "Amharic" : "Afan Oromo";
+    // Feedback is shown in the learner's native language (opposite of target language).
+    const feedbackLanguage = targetLanguage === "ao" ? "Amharic" : "Afan Oromo";
 
     const prompt = `You are an expert ${languageName} language teacher.
 Listen to the provided audio clip and compare it to the expected text.
