@@ -18,7 +18,8 @@ import dialogueRoutes from "./modules/dialogue/dialogue.routes";
 import writingRoutes from "./modules/writtingExercise/writtingExercise.routes";
 import speakingRoutes from "./modules/speaking/speaking.routes";
 import { v2 as cloudinary } from 'cloudinary';
-
+import swaggerJsdoc from "swagger-jsdoc";
+import  swaggerUi from 'swagger-ui-express';
 
 dotenv.config();
 
@@ -34,6 +35,48 @@ connectDB();
 
 const app = express();
 
+
+// Swagger definition
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'My Express API',
+      version: '1.0.0',
+      description: 'A simple Express API with Swagger documentation',
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+    servers: [
+      {
+        url: 'http://localhost:5000',
+      },
+    ],
+  },
+  // Path to the API docs (where you'll write your swagger comments)
+  apis: [
+    "./src/modules/**/*.routes.ts",
+    "./src/modules/**/*.controller.ts",
+    "./dist/modules/**/*.routes.js",
+    "./dist/modules/**/*.controller.js",
+  ],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+// CSS/UI Route
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api-docs.json', (_req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerSpec);
+});
 app.use(cors());
 app.use(express.json());
 

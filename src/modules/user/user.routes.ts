@@ -3,6 +3,21 @@ import { authenticate, checkRole } from "../../middleware/auth.middleware";
 
 const router = Router();
 
+
+
+/**
+ * @openapi
+ * /api/users/admin-only:
+ *   get:
+ *     tags:
+ *       - User
+ *     summary: GET /admin-only
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ */
 router.get(
   "/admin-only",
   authenticate,

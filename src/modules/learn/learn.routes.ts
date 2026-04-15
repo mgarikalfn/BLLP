@@ -8,8 +8,64 @@ import { authenticate } from "../../middleware/auth.middleware";
 
 const router = Router();
 
+
+
+/**
+ * @openapi
+ * /api/learn/topic/{topicId}:
+ *   get:
+ *     tags:
+ *       - Learn
+ *     summary: GET /topic/:topicId
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ */
 router.get("/topic/:topicId", authenticate, getTopicLessons);
+
+
+/**
+ * @openapi
+ * /api/learn/complete:
+ *   post:
+ *     tags:
+ *       - Learn
+ *     summary: POST /complete
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [lessonId]
+ *             properties:
+ *               lessonId:
+ *                 type: string
+ *                 description: Lesson ObjectId
+ *     responses:
+ *       200:
+ *         description: Success
+ */
 router.post("/complete", authenticate, completeLesson);
+
+
+/**
+ * @openapi
+ * /api/learn/lessons/{id}:
+ *   get:
+ *     tags:
+ *       - Learn
+ *     summary: GET /lessons/:id
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ */
 router.get("/lessons/:id",authenticate,getLessonsById);
 
 export default router;
