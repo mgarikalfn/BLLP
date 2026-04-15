@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Topic } from "../content/topic.model";
 import { Lesson } from "../content/lesson.model";
+import { Question } from "../content/question.model";
 import { Progress } from "../study/progress.model";
 import { StudyStats } from "../study/study.statts.models";
 
@@ -96,9 +97,18 @@ export const completeLesson = async (req: Request, res: Response) => {
 export const getLessonsById = async (req:Request , res:Response) => {
   try{
     const {id} = req.params;
-    const lesson = await Lesson.findById(id);
+    const [lesson, lessonQuestions] = await Promise.all([
+      Lesson.findById(id),
+      Question.find({
+        lessonId: id,
+        intendedFor: { $in: ["LESSON", "BOTH"] },
+      }),
+    ]);
     if(!lesson) return  res.status(404).json({ message: "Lesson not found" });
-    res.status(200).json(lesson);
+    res.status(200).json({
+      ...lesson.toObject(),
+      quiz: lessonQuestions,
+    });
   } catch (error) {
     console.error("Error fetching lesson:", error);
     res.status(500).json({ message: "Server error", error });

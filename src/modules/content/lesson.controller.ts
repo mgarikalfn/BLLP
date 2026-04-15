@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Lesson } from "./lesson.model";
+import { Question } from "./question.model";
 import { GeminiAudioService } from "../../services/audio.services";
 
 // Helper to pause execution
@@ -7,9 +8,38 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const audioService = new GeminiAudioService();
 
+const QUESTION_TYPES = ["MULTIPLE_CHOICE", "MATCHING", "SCRAMBLE", "CLOZE"] as const;
+const QUESTION_INTENDED_FOR = ["LESSON", "TEST", "BOTH"] as const;
+
+const buildQuestionDocs = (
+  quiz: Array<Record<string, any>>,
+  topicId: unknown,
+  lessonId: unknown,
+) => {
+  return quiz
+    .filter((q) => q && typeof q === "object" && q.content !== undefined)
+    .map((q) => {
+      const intendedFor = QUESTION_INTENDED_FOR.includes(q.intendedFor)
+        ? q.intendedFor
+        : "LESSON";
+      const type = QUESTION_TYPES.includes(q.type)
+        ? q.type
+        : "MULTIPLE_CHOICE";
+
+      return {
+        topicId,
+        lessonId,
+        intendedFor,
+        type,
+        content: q.content,
+        isVerified: typeof q.isVerified === "boolean" ? q.isVerified : false,
+      };
+    });
+};
+
 export const createLesson = async (req: Request, res: Response) => {
   try {
-    const { topicId, order, title, vocabulary, quiz, isVerified } = req.body;
+    const { topicId, order, title, grammarNotes, vocabulary, dialogue, quiz, isVerified } = req.body;
 
     // Generate audio for vocabulary and examples
     if (vocabulary && Array.isArray(vocabulary)) {
@@ -54,12 +84,33 @@ export const createLesson = async (req: Request, res: Response) => {
       topicId,
       order,
       title,
+      grammarNotes,
       vocabulary,
-      quiz,
-      isVerified // Optional: will default to false if not provided, based on your schema
+      dialogue,
+      isVerified,
     });
 
-    return res.status(201).json(lesson);
+    let createdQuizCount = 0;
+    if (Array.isArray(quiz) && quiz.length > 0) {
+      const questionDocs = buildQuestionDocs(quiz, topicId, lesson._id);
+
+      if (questionDocs.length > 0) {
+        try {
+          await Question.insertMany(questionDocs);
+          createdQuizCount = questionDocs.length;
+        } catch (questionError) {
+          // Best-effort rollback to keep package creation consistent.
+          await Lesson.findByIdAndDelete(lesson._id);
+          throw questionError;
+        }
+      }
+    }
+
+    return res.status(201).json({
+      message: "Lesson and quizzes created successfully",
+      lesson,
+      quizCount: createdQuizCount,
+    });
   } catch (error: any) {
     // THIS IS THE MOST IMPORTANT LINE FOR DEBUGGING
     console.error("CRITICAL LESSON ERROR:", error);
@@ -97,6 +148,32 @@ export const getLessonsByTopic = async (req: Request, res: Response) => {
   }
 };
 
+export const getLessonById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const [lesson, lessonQuestions] = await Promise.all([
+      Lesson.findById(id),
+      Question.find({
+        lessonId: id,
+        intendedFor: { $in: ["LESSON", "BOTH"] },
+      }),
+    ]);
+
+    if (!lesson) {
+      return res.status(404).json({ message: "Lesson not found" });
+    }
+
+    return res.status(200).json({
+      ...lesson.toObject(),
+      quiz: lessonQuestions,
+    });
+  } catch (error: any) {
+    console.error("Error fetching lesson:", error);
+    return res.status(500).json({ message: "Error fetching lesson", error: error.message });
+  }
+};
+
 export const updateLesson = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -104,19 +181,39 @@ export const updateLesson = async (req: Request, res: Response) => {
     const lesson = await Lesson.findById(id);
     if (!lesson) return res.status(404).json({ message: "Lesson not found" });
 
-    const updatedData = req.body;
+    const { quiz } = req.body;
+    const updatedData = { ...req.body };
 
     // Never override MongoDB specific keys manually to avoid VersionErrors
     delete updatedData._id;
     delete updatedData.__v;
     delete updatedData.createdAt;
     delete updatedData.updatedAt;
+    delete updatedData.quiz;
 
     Object.assign(lesson, updatedData);
 
     await lesson.save();
 
-    return res.json(lesson);
+    let quizCount: number | null = null;
+    if (Array.isArray(quiz)) {
+      await Question.deleteMany({ lessonId: lesson._id });
+
+      const questionDocs = buildQuestionDocs(quiz, lesson.topicId, lesson._id);
+      if (questionDocs.length > 0) {
+        await Question.insertMany(questionDocs);
+      }
+      quizCount = questionDocs.length;
+    }
+
+    return res.json(
+      quizCount === null
+        ? lesson
+        : {
+            lesson,
+            quizCount,
+          },
+    );
   } catch (error: any) {
     console.error("CRITICAL LESSON UPDATE ERROR:", error);
     if (error.code === 11000) {
@@ -256,9 +353,12 @@ export const deleteLesson = async (req: Request, res: Response) => {
     const lesson = await Lesson.findById(id);
     if (!lesson) return res.status(404).json({ message: "Lesson not found" });
 
-    await lesson.deleteOne();
+    const [questionDeleteResult] = await Promise.all([
+      Question.deleteMany({ lessonId: lesson._id }),
+      lesson.deleteOne(),
+    ]);
 
-    res.json({ message: "Lesson deleted" });
+    res.json({ message: "Lesson deleted", removedQuestions: questionDeleteResult.deletedCount ?? 0 });
   } catch {
     res.status(500).json({ message: "Server error" });
   }

@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
+import { Types } from "mongoose";
 import { Topic } from "./topic.model";
 
 import { generateSlug } from "../../utils/slugify";
 import { Lesson } from "./lesson.model";
+import { Question } from "./question.model";
 
 export const createTopic = async (req: Request, res: Response) => {
   try {
@@ -93,11 +95,47 @@ export const deleteTopic = async (req: Request, res: Response) => {
     const topic = await Topic.findById(id);
     if (!topic) return res.status(404).json({ message: "Topic not found" });
 
-    await Lesson.deleteMany({ topicId: id });
+    await Promise.all([
+      Lesson.deleteMany({ topicId: id }),
+      Question.deleteMany({ topicId: id }),
+    ]);
     await topic.deleteOne();
 
-    res.json({ message: "Topic and related lessons deleted" });
+    res.json({ message: "Topic and related lessons/questions deleted" });
   } catch {
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getTopicTest = async (req: Request, res: Response) => {
+  try {
+    const topicId = Array.isArray(req.params.topicId)
+      ? req.params.topicId[0]
+      : req.params.topicId;
+    const requestedSize = Number(req.query.size);
+    const sampleSize = Number.isInteger(requestedSize) && requestedSize > 0 ? requestedSize : 10;
+
+    if (!topicId || !Types.ObjectId.isValid(topicId)) {
+      return res.status(400).json({ message: "Invalid topic id" });
+    }
+
+    const testQuestions = await Question.aggregate([
+      {
+        $match: {
+          topicId: new Types.ObjectId(topicId),
+          intendedFor: { $in: ["TEST", "BOTH"] },
+        },
+      },
+      { $sample: { size: sampleSize } },
+    ]);
+
+    return res.status(200).json({
+      topicId,
+      count: testQuestions.length,
+      questions: testQuestions,
+    });
+  } catch (error) {
+    console.error("Error generating topic test:", error);
+    return res.status(500).json({ message: "Error generating topic test" });
   }
 };

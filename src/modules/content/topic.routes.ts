@@ -3,6 +3,7 @@ import {
   createTopic,
   deleteTopic,
   getAllTopics,
+  getTopicTest,
   updateTopic,
 } from "./topic.controller";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";
@@ -19,6 +20,7 @@ router.delete(
   checkRole(["EXPERT", "ADMIN"]),
   deleteTopic,
 );
+router.get("/:topicId/test", getTopicTest);
 router.get("/", getAllTopics);
 
 export default router;

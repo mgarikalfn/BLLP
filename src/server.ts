@@ -8,6 +8,7 @@ import { ENV } from "./config/env";
 import path from "path";
 import topicRoutes from "./modules/content/topic.routes";
 import lessonRoutes from "./modules/content/lesson.routes";
+import questionRoutes from "./modules/content/question.routes";
 import studyRoutes from "./modules/study/study.routes";
 import learnRoutes from "./modules/learn/learn.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
@@ -44,6 +45,7 @@ app.use("/api/users", userRoutes);
 
 app.use("/api/topics", topicRoutes);
 app.use("/api/lessons", lessonRoutes);
+app.use("/api/questions", questionRoutes);
 app.use("/api/study", studyRoutes);
 app.use("/api/learn", learnRoutes);
 app.use("/api/dialogues", dialogueRoutes);

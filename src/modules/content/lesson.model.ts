@@ -1,4 +1,5 @@
 import { Schema, model, Document, Types } from "mongoose";
+import { text } from "stream/consumers";
 
 export interface ILesson extends Document {
   topicId: Types.ObjectId;
@@ -6,6 +7,12 @@ export interface ILesson extends Document {
   title: {
     am: string; // Amharic
     ao: string; // Afan Oromo
+  };
+
+  //theory (optional:explain a rule before learning words)
+  grammarNotes?: {
+    am: string;
+    ao: string;
   };
   // 1. FLASHCARD CONTENT (The "What")
   vocabulary: Array<{
@@ -15,31 +22,41 @@ export interface ILesson extends Document {
       am?: string;
       ao?: string;
     }; // For pronunciation
-    example?: { 
-      am: string; 
-      ao: string; 
+    example?: {
+      am: string;
+      ao: string;
       audioUrl?: {
         am?: string;
         ao?: string;
       };
     }; // Context helps memory
   }>;
-  // 2. ASSESSMENT (The "Gatekeeper")
-  quiz: Array<{
-    question: { am: string; ao: string };
-    options: Array<{ am: string; ao: string }>;
-    correctAnswerIndex: number;
+
+  dialogue?: Array<{
+    speaker: string;
+    text: { am: string; ao: string };
+    audioUrl?: { am?: string; ao?: string };
   }>;
+
   isVerified: boolean;
 }
 
 const lessonSchema = new Schema<ILesson>(
   {
-    topicId: { type: Schema.Types.ObjectId, ref: "Topic", required: true, index: true },
+    topicId: {
+      type: Schema.Types.ObjectId,
+      ref: "Topic",
+      required: true,
+      index: true,
+    },
     order: { type: Number, required: true },
     title: {
       am: { type: String, required: true },
       ao: { type: String, required: true },
+    },
+    grammarNotes: {
+      am: { type: String },
+      ao: { type: String },
     },
     vocabulary: [
       {
@@ -59,24 +76,19 @@ const lessonSchema = new Schema<ILesson>(
         },
       },
     ],
-    quiz: [
+    dialogue: [
       {
-        question: {
+        speaker: { type: String, required: true },
+        text: {
           am: { type: String, required: true },
           ao: { type: String, required: true },
         },
-        options: [
-          {
-            am: { type: String, required: true },
-            ao: { type: String, required: true },
-          },
-        ],
-        correctAnswerIndex: { type: Number, required: true },
+        audioUrl: { am: { type: String }, ao: { type: String } },
       },
     ],
     isVerified: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const Lesson = model<ILesson>("Lesson", lessonSchema);

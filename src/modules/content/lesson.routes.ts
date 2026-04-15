@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createLesson, deleteLesson, resumeLessonAudioGeneration, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
+import { createLesson, deleteLesson, getLessonById, resumeLessonAudioGeneration, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";     
 
 const router = Router();
@@ -32,6 +32,7 @@ router.patch(
   checkRole(["EXPERT", "ADMIN"]),
   toggleVerification
 );
+router.get("/:id", getLessonById);
 router.get("/topic/:topicId", getLessonsByTopic);
 
 export default router;
