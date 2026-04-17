@@ -135,6 +135,23 @@ router.post("/create", authenticate, checkRole(["EXPERT", "ADMIN"]), createSpeak
  *     tags:
  *       - Speaking
  *     summary: GET /
+ *     parameters:
+ *       - in: query
+ *         name: topicId
+ *         required: false
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: level
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+ *       - in: query
+ *         name: verified
+ *         required: false
+ *         schema:
+ *           type: boolean
  *     responses:
  *       200:
  *         description: Success
@@ -149,6 +166,13 @@ router.get("/", getAllSpeakingExercises);
  *     tags:
  *       - Speaking
  *     summary: GET /:id
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Speaking exercise ObjectId
  *     responses:
  *       200:
  *         description: Success
@@ -165,6 +189,13 @@ router.get("/:id", getSpeakingExerciseById);
  *     summary: PUT /:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Speaking exercise ObjectId
  *     requestBody:
  *       required: true
  *       content:
@@ -216,6 +247,13 @@ router.put("/:id", authenticate, checkRole(["EXPERT", "ADMIN"]), updateSpeakingE
  *     summary: DELETE /:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Speaking exercise ObjectId
  *     responses:
  *       200:
  *         description: Success

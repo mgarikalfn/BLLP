@@ -19,6 +19,13 @@ const router = Router();
  *     summary: GET /topic/:topicId
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: topicId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Topic ObjectId
  *     responses:
  *       200:
  *         description: Success
@@ -62,6 +69,13 @@ router.post("/complete", authenticate, completeLesson);
  *     summary: GET /lessons/:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Lesson ObjectId
  *     responses:
  *       200:
  *         description: Success

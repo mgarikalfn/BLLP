@@ -17,6 +17,13 @@ const router = Router();
  *     summary: GET /:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Writing exercise ObjectId
  *     responses:
  *       200:
  *         description: Success

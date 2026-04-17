@@ -111,6 +111,23 @@ router.post("/", authenticate, checkRole(["EXPERT", "ADMIN"]), createDialogue);
  *     tags:
  *       - Dialogue
  *     summary: GET /
+ *     parameters:
+ *       - in: query
+ *         name: topicId
+ *         required: false
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: level
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+ *       - in: query
+ *         name: verified
+ *         required: false
+ *         schema:
+ *           type: boolean
  *     responses:
  *       200:
  *         description: Success
@@ -125,6 +142,13 @@ router.get("/", getAllDialogues);
  *     tags:
  *       - Dialogue
  *     summary: GET /topic/:topicId
+ *     parameters:
+ *       - in: path
+ *         name: topicId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Topic ObjectId
  *     responses:
  *       200:
  *         description: Success
@@ -139,6 +163,13 @@ router.get("/topic/:topicId", getDialoguesByTopic);
  *     tags:
  *       - Dialogue
  *     summary: GET /:id
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Dialogue ObjectId
  *     responses:
  *       200:
  *         description: Success
@@ -155,6 +186,13 @@ router.get("/:id", getDialogueById);
  *     summary: PUT /:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Dialogue ObjectId
  *     requestBody:
  *       required: true
  *       content:
@@ -240,6 +278,13 @@ router.put("/:id", authenticate, checkRole(["EXPERT", "ADMIN"]), updateDialogue)
  *     summary: PATCH /:id/verify
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Dialogue ObjectId
  *     responses:
  *       200:
  *         description: Success
@@ -261,6 +306,13 @@ router.patch(
  *     summary: DELETE /:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Dialogue ObjectId
  *     responses:
  *       200:
  *         description: Success

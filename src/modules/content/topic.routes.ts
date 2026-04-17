@@ -22,6 +22,34 @@ const router = Router();
  *     summary: POST /
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title, description, level]
+ *             properties:
+ *               title:
+ *                 type: object
+ *                 required: [am, ao]
+ *                 properties:
+ *                   am:
+ *                     type: string
+ *                   ao:
+ *                     type: string
+ *               description:
+ *                 type: object
+ *                 required: [am, ao]
+ *                 properties:
+ *                   am:
+ *                     type: string
+ *                   ao:
+ *                     type: string
+ *               level:
+ *                 type: string
+ *               thumbnailUrl:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Success
@@ -38,6 +66,38 @@ router.post("/", authenticate, checkRole(["EXPERT", "ADMIN"]), createTopic);
  *     summary: PUT /:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Topic ObjectId
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: object
+ *                 properties:
+ *                   am:
+ *                     type: string
+ *                   ao:
+ *                     type: string
+ *               description:
+ *                 type: object
+ *                 properties:
+ *                   am:
+ *                     type: string
+ *                   ao:
+ *                     type: string
+ *               level:
+ *                 type: string
+ *               thumbnailUrl:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Success
@@ -70,6 +130,13 @@ router.put("/:id", authenticate, checkRole(["EXPERT", "ADMIN"]), updateTopic);
  *     summary: DELETE /:id
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Topic ObjectId
  *     responses:
  *       200:
  *         description: Success
@@ -89,6 +156,20 @@ router.delete(
  *     tags:
  *       - Content
  *     summary: GET /:topicId/test
+ *     parameters:
+ *       - in: path
+ *         name: topicId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Topic ObjectId
+ *       - in: query
+ *         name: size
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Number of random test questions to sample
  *     responses:
  *       200:
  *         description: Success
