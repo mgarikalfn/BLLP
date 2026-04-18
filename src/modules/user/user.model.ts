@@ -22,6 +22,11 @@ export enum targetLanguage {
   OROMO = "OROMO",
 }
 
+export enum LearningDirection {
+  AM_TO_OR = "AM_TO_OR",
+  OR_TO_AM = "OR_TO_AM",
+}
+
 export interface IUser extends Document {
   email: string;
   username: string;
@@ -30,6 +35,8 @@ export interface IUser extends Document {
   userStatus: UserStatus;
   ProficiencyLevel: ProficiencyLevel;
   targetLanguage: targetLanguage;
+  learningDirection: LearningDirection;
+  avatarUrl?: string;
 }
 
 const userSchema = new Schema<IUser>(
@@ -56,6 +63,15 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: Object.values(targetLanguage),
       default: targetLanguage.AMHARIC,
+    },
+    learningDirection: {
+      type: String,
+      enum: Object.values(LearningDirection),
+      default: LearningDirection.AM_TO_OR,
+    },
+    avatarUrl: {
+      type: String,
+      required: false,
     },
   },
   { timestamps: true },
