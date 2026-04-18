@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  completeDialogue,
 	createDialogue,
 	deleteDialogue,
 	getAllDialogues,
@@ -175,6 +176,28 @@ router.get("/topic/:topicId", getDialoguesByTopic);
  *         description: Success
  */
 router.get("/:id", getDialogueById);
+
+/**
+ * @openapi
+ * /api/dialogues/{id}/complete:
+ *   post:
+ *     tags:
+ *       - Dialogue
+ *     summary: Mark dialogue as completed
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Dialogue ObjectId
+ *     responses:
+ *       200:
+ *         description: Dialogue completion recorded
+ */
+router.post("/:id/complete", authenticate, completeDialogue);
 
 
 /**

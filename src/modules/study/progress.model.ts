@@ -40,7 +40,7 @@ const progressSchema = new Schema<IProgress>(
   { timestamps: true }
 );
 
-// CRITICAL: Ensure a user only has one progress record per piece of content
-progressSchema.index({ userId: 1, contentId: 1 }, { unique: true });
+// CRITICAL: Ensure a user only has one progress record per content type + content item.
+progressSchema.index({ userId: 1, contentId: 1, contentType: 1 }, { unique: true });
 
 export const Progress = model<IProgress>("Progress", progressSchema);

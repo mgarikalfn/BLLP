@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { Dialogue, DifficultyLevel } from "./dialogue.model";
+import { Progress } from "../study/progress.model";
+import { StudyStats } from "../study/study.statts.models";
 
 const isValidDifficultyLevel = (value: unknown): value is DifficultyLevel => {
   return (
@@ -113,6 +115,70 @@ export const getDialoguesByTopic = async (req: Request, res: Response) => {
     return res.json(dialogues);
   } catch (error: any) {
     console.error("Get dialogues by topic error:", error);
+    return res.status(500).json({ message: "Server error", details: error.message });
+  }
+};
+
+export const completeDialogue = async (req: Request, res: Response) => {
+  const authReq = req as any;
+  const userId = authReq.user?.id;
+
+  try {
+    const dialogueId = String(req.params.id);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(dialogueId)) {
+      return res.status(400).json({ message: "Invalid dialogue id" });
+    }
+
+    const dialogue = await Dialogue.findById(dialogueId);
+    if (!dialogue) {
+      return res.status(404).json({ message: "Dialogue not found" });
+    }
+
+    const now = new Date();
+    const progress = await Progress.findOneAndUpdate(
+      {
+        userId,
+        contentId: dialogueId,
+        contentType: "DIALOGUE",
+      },
+      {
+        $set: {
+          lastReviewed: now,
+          nextReview: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          repetition: 1,
+          interval: 1,
+          easeFactor: 2.5,
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+
+    let stats = await StudyStats.findOne({ userId });
+    if (!stats) {
+      stats = new StudyStats({ userId });
+    }
+
+    const flatXp = 10;
+    stats.xp = (stats.xp || 0) + flatXp;
+    await stats.save();
+
+    return res.status(200).json({
+      message: "Dialogue completed",
+      xpEarned: flatXp,
+      totalXP: stats.xp,
+      nextReview: progress?.nextReview,
+    });
+  } catch (error: any) {
+    console.error("Complete dialogue error:", error);
     return res.status(500).json({ message: "Server error", details: error.message });
   }
 };

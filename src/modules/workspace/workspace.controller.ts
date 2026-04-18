@@ -51,12 +51,13 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
 
     const userProgress = await Progress.find({
       userId,
-      contentId: { $in: allContentIds } // Using contentId now!
-    }).select("contentId").lean();
+      contentId: { $in: allContentIds },
+      contentType: { $in: ["LESSON", "DIALOGUE", "WRITING", "SPEAKING"] },
+    }).select("contentId contentType").lean();
 
-    // Create a Set for O(1) lookup speed
-    const completedContentIds = new Set(
-      userProgress.map(p => p.contentId.toString())
+    // Create a composite-key Set for O(1) lookup speed and type-safe completion checks.
+    const completedContentKeys = new Set(
+      userProgress.map(p => `${p.contentType}:${p.contentId.toString()}`)
     );
 
     // 5. Group Content by Topic
@@ -92,7 +93,8 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
 
       // Apply Status Logic to the combined sequence
       const processedSequence = rawSequence.map(item => {
-        const isCompleted = completedContentIds.has(item._id.toString());
+        const completionKey = `${item.type}:${item._id.toString()}`;
+        const isCompleted = completedContentKeys.has(completionKey);
         let status = "locked";
 
         if (isCompleted) {
