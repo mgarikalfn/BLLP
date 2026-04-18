@@ -37,7 +37,10 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
 
     const progressAggregationPromise = Progress.aggregate([
       {
-        $match: { userId }
+        $match: {
+          userId,
+          contentType: "LESSON"
+        }
       },
 
       {
@@ -54,7 +57,7 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
             {
               $lookup: {
                 from: "lessons",
-                localField: "lessonId",
+                localField: "contentId",
                 foreignField: "_id",
                 as: "lesson"
               }
@@ -84,8 +87,7 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
           lessonsToday: [
             {
               $match: {
-                completed: true,
-                updatedAt: { $gte: todayStart }
+                createdAt: { $gte: todayStart }
               }
             },
             { $count: "count" }
@@ -95,7 +97,7 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
           reviewsToday: [
             {
               $match: {
-                reviewedAt: { $gte: todayStart }
+                lastReviewed: { $gte: todayStart }
               }
             },
             { $count: "count" }
@@ -103,13 +105,13 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
 
           /** Continue lesson */
           continueLesson: [
-            { $match: { completed: false } },
+            { $match: { repetition: { $lte: 0 } } },
             { $sort: { updatedAt: -1 } },
             { $limit: 1 },
             {
               $lookup: {
                 from: "lessons",
-                localField: "lessonId",
+                localField: "contentId",
                 foreignField: "_id",
                 as: "lesson"
               }

@@ -6,8 +6,9 @@ export const getRecommendedLesson = async (userId: string) => {
   // 1️⃣ Get completed lessons for user
   const completed = await Progress.find({
     userId,
+    contentType: "LESSON",
     repetition: { $gt: 0 }
-  }).populate("lessonId");
+  }).select("contentId").lean();
 
   if (completed.length === 0) {
     // First time learner → first lesson
@@ -15,9 +16,19 @@ export const getRecommendedLesson = async (userId: string) => {
     return firstLesson;
   }
 
+  const completedLessonIds = completed.map((p: any) => p.contentId);
+  const completedLessons = await Lesson.find({ _id: { $in: completedLessonIds } })
+    .select("order")
+    .lean();
+
+  if (completedLessons.length === 0) {
+    const firstLesson = await Lesson.findOne().sort({ order: 1 });
+    return firstLesson;
+  }
+
   // 2️⃣ Find highest order completed
   const highestOrder = Math.max(
-    ...completed.map((p: any) => p.lessonId.order)
+    ...completedLessons.map((l: any) => l.order)
   );
 
   // 3️⃣ Suggest next lesson in sequence

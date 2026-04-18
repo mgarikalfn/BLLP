@@ -165,7 +165,7 @@ router.delete(
  *         description: Topic ObjectId
  *       - in: query
  *         name: size
- *         required: false
+ *         required: falses
  *         schema:
  *           type: integer
  *           minimum: 1

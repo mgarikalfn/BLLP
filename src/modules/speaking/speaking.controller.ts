@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { SpeakingEvaluationService } from "./speakingEvaluation.service";
 import { SpeakingAttempt } from "./speakingAttempt.model";
 import { SpeakingExercise } from "./speakingExercise.model";
+import { Progress } from "../study/progress.model";
 
 const speakingLevels = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
 
@@ -326,6 +327,29 @@ export const submitSpeakingExercise = async (req: Request, res: Response) => {
       isCompleted: normalizedIsCorrect,
       feedback: normalizedFeedback
     });
+
+    // Track speaking progress in polymorphic progress model.
+    await Progress.findOneAndUpdate(
+      {
+        userId: (req as any).user.id,
+        contentId: exerciseId,
+        contentType: "SPEAKING",
+      },
+      {
+        $set: {
+          lastReviewed: new Date(),
+          nextReview: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          bestScore: normalizedIsCorrect ? 100 : 0,
+          repetition: normalizedIsCorrect ? 1 : 0,
+          interval: 1,
+          easeFactor: 2.5,
+        },
+      },
+      {
+        upsert: true,
+        setDefaultsOnInsert: true,
+      }
+    );
 
     // 4. Return the Evaluation Results
     return res.status(200).json({

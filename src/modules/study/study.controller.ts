@@ -29,12 +29,17 @@ export const reviewLesson = async (req: Request, res: Response) => {
     }
 
     // ===== PROGRESS (SM-2) =====
-    let progress = await Progress.findOne({ userId, lessonId });
+    let progress = await Progress.findOne({
+      userId,
+      contentId: lessonId,
+      contentType: "LESSON",
+    });
 
     if (!progress) {
       progress = new Progress({
         userId,
-        lessonId,
+        contentId: lessonId,
+        contentType: "LESSON",
       });
     }
 
@@ -147,10 +152,20 @@ export const getDueLessons = async (req: Request, res: Response) => {
     const authReq = req as AuthRequest;
     const userId = authReq.user!.id;
 
-    const dueLessons = await Progress.find({
+    const dueProgress = await Progress.find({
       userId,
+      contentType: "LESSON",
       nextReview: { $lte: new Date() },
-    }).populate("lessonId");
+    }).lean();
+
+    const lessonIds = dueProgress.map((p) => p.contentId);
+    const lessons = await Lesson.find({ _id: { $in: lessonIds } }).lean();
+    const lessonMap = new Map(lessons.map((lesson: any) => [lesson._id.toString(), lesson]));
+
+    const dueLessons = dueProgress.map((p: any) => ({
+      ...p,
+      lessonId: lessonMap.get(p.contentId.toString()) || null,
+    }));
 
     res.json(dueLessons);
   } catch {
@@ -171,17 +186,21 @@ export const startStudySession = async (req: Request, res: Response) => {
     // ===== FETCH POOLS =====
     const dueProgress = await Progress.find({
       userId,
+      contentType: "LESSON",
       nextReview: { $lte: now },
-    }).populate("lessonId");
+    }).lean();
 
     const weakProgress = await Progress.find({
       userId,
+      contentType: "LESSON",
       easeFactor: { $lt: 2.0 },
       nextReview: { $gt: now },
-    }).populate("lessonId");
+    }).lean();
 
-    const seenProgress = await Progress.find({ userId }).select("lessonId");
-    const seenIds = seenProgress.map((p) => p.lessonId.toString());
+    const seenProgress = await Progress.find({ userId, contentType: "LESSON" })
+      .select("contentId")
+      .lean();
+    const seenIds = seenProgress.map((p: any) => p.contentId.toString());
 
     const newLessons = await Lesson.find({
       _id: { $nin: seenIds },
@@ -189,8 +208,21 @@ export const startStudySession = async (req: Request, res: Response) => {
     });
 
     // ===== EXTRACT LESSON OBJECTS =====
-    const dueLessons = dueProgress.map((p) => p.lessonId);
-    const weakLessons = weakProgress.map((p) => p.lessonId);
+    const pooledLessonIds = Array.from(
+      new Set(
+        [...dueProgress, ...weakProgress].map((p: any) => p.contentId.toString()),
+      ),
+    );
+
+    const pooledLessons = await Lesson.find({ _id: { $in: pooledLessonIds } }).lean();
+    const lessonMap = new Map(pooledLessons.map((lesson: any) => [lesson._id.toString(), lesson]));
+
+    const dueLessons = dueProgress
+      .map((p: any) => lessonMap.get(p.contentId.toString()))
+      .filter(Boolean);
+    const weakLessons = weakProgress
+      .map((p: any) => lessonMap.get(p.contentId.toString()))
+      .filter(Boolean);
 
     // Shuffle helper
     const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
@@ -269,11 +301,16 @@ export const getWeakAreas = async (req: Request, res: Response) => {
     // 1️⃣ Weak lessons (low ease factor)
     const weakProgress = await Progress.find({
       userId,
+      contentType: "LESSON",
       easeFactor: { $lt: 2.0 },
-    }).populate("lessonId");
+    }).lean();
+
+    const weakLessonIds = weakProgress.map((p: any) => p.contentId);
+    const weakLessonDocs = await Lesson.find({ _id: { $in: weakLessonIds } }).lean();
+    const weakLessonMap = new Map(weakLessonDocs.map((lesson: any) => [lesson._id.toString(), lesson]));
 
     const weakLessons = weakProgress.map((p) => ({
-      lesson: p.lessonId,
+      lesson: weakLessonMap.get((p as any).contentId.toString()) || null,
       easeFactor: p.easeFactor,
       interval: p.interval,
       repetition: p.repetition,
@@ -282,8 +319,9 @@ export const getWeakAreas = async (req: Request, res: Response) => {
     // 2️⃣ Aggregate weak topics
     const topicMap: Record<string, number> = {};
 
-    weakProgress.forEach((p) => {
-      const lesson: any = p.lessonId;
+    weakProgress.forEach((p: any) => {
+      const lesson: any = weakLessonMap.get(p.contentId.toString());
+      if (!lesson) return;
       const topicId = lesson.topicId.toString();
 
       topicMap[topicId] = (topicMap[topicId] || 0) + 1;

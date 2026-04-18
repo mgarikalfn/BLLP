@@ -52,12 +52,17 @@ export const completeLesson = async (req: Request, res: Response) => {
       });
     }
 
-    let progress = await Progress.findOne({ userId, lessonId });
+    let progress = await Progress.findOne({
+      userId,
+      contentId: lessonId,
+      contentType: "LESSON",
+    });
 
     if (!progress) {
       progress = new Progress({
         userId,
-        lessonId,
+        contentId: lessonId,
+        contentType: "LESSON",
         repetition: 0,
         interval: 1,
         easeFactor: 2.5,

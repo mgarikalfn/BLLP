@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { WritingExercise } from "./writingExercise.model";
 import { WritingAttempt } from "./WritingAttempt.model";
 import { WritingEvaluationService } from "./writingEvaluation.service";
+import { Progress } from "../study/progress.model";
 
 export const submitWritingExercise = async (req: Request, res: Response) => {
   try {
@@ -32,6 +33,29 @@ export const submitWritingExercise = async (req: Request, res: Response) => {
       isCompleted: evaluation.isCorrect,
       // Pro-tip: Add a 'feedback' field to your WritingAttempt model to save this!
     });
+
+    // Track writing progress in polymorphic progress model.
+    await Progress.findOneAndUpdate(
+      {
+        userId,
+        contentId: exerciseId,
+        contentType: "WRITING",
+      },
+      {
+        $set: {
+          lastReviewed: new Date(),
+          nextReview: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          bestScore: evaluation.isCorrect ? 100 : 0,
+          repetition: evaluation.isCorrect ? 1 : 0,
+          interval: 1,
+          easeFactor: 2.5,
+        },
+      },
+      {
+        upsert: true,
+        setDefaultsOnInsert: true,
+      }
+    );
 
     // 3. Return a Rich Response
     return res.status(200).json({

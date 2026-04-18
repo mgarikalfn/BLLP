@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose";
 import { Topic } from "../content/topic.model";
 import { Lesson } from "../content/lesson.model";
 import { Dialogue } from "../dialogue/dialogue.model";
@@ -7,179 +6,142 @@ import { WritingExercise } from "../writtingExercise/writingExercise.model";
 import { SpeakingExercise } from "../speaking/speakingExercise.model";
 import { Progress } from "../study/progress.model";
 
-
-
 type AuthRequest = Request & {
   user?: { id: string };
 };
 
-export const getTopicsFeed = async (
-  req: AuthRequest,
-  res: Response
-) => {
- try {
+export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
+  try {
     const userId = req.user?.id;
 
-    // 1. Pagination Params
+    // 1. Pagination & Filtering
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 5; // Smaller limit is better for "Units"
+    const limit = parseInt(req.query.limit as string) || 5;
     const level = req.query.level as string;
     const skip = (page - 1) * limit;
 
     const filter: any = {};
     if (level) filter.level = level;
 
-    // 2. Fetch Topics for this "chunk" of the infinite scroll
+    // 2. Fetch Topics
     const topics = await Topic.find(filter)
-      .sort({ order: 1, createdAt: 1 }) // Ensure alphabetical or manual order
+      .sort({ order: 1, createdAt: 1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
     const topicIds = topics.map(t => t._id);
 
-    // 3. Fetch ALL lessons belonging to these topics
-    const allLessons = await Lesson.find({
-      topicId: { $in: topicIds }
-    })
-      .select("_id topicId order title")
-      .sort({ order: 1 })
-      .lean();
+    // 3. Fetch All Content Types in Parallel
+    const [allLessons, allDialogues, allWriting, allSpeaking] = await Promise.all([
+      Lesson.find({ topicId: { $in: topicIds } }).sort({ order: 1 }).lean(),
+      Dialogue.find({ topicId: { $in: topicIds } }).lean(),
+      WritingExercise.find({ topicId: { $in: topicIds } }).lean(),
+      SpeakingExercise.find({ topicId: { $in: topicIds } }).lean()
+    ]);
 
-    // 3.1 Fetch dialogues for these topics (id + title-like localized text)
-    const allDialogues = await Dialogue.find({
-      topicId: { $in: topicIds }
-    })
-      .select("_id topicId scenario")
-      .sort({ createdAt: 1 })
-      .lean();
+    // 4. Fetch Polymorphic User Progress
+    // We collect every ID we just fetched to optimize the DB query
+    const allContentIds = [
+      ...allLessons.map(l => l._id),
+      ...allDialogues.map(d => d._id),
+      ...allWriting.map(w => w._id),
+      ...allSpeaking.map(s => s._id)
+    ];
 
-    // 3.2 Fetch writing exercises for these topics
-    const allWritingExercises = await WritingExercise.find({
-      topicId: { $in: topicIds }
-    })
-      .select("_id topicId type prompt")
-      .sort({ createdAt: 1 })
-      .lean();
-
-    // 3.3 Fetch speaking exercises for these topics
-    const allSpeakingExercises = await SpeakingExercise.find({
-      topicId: { $in: topicIds }
-    })
-      .select("_id topicId prompt expectedText")
-      .sort({ createdAt: 1 })
-      .lean();
-
-    // 4. Fetch User Progress for these specific lessons
-    const lessonIds = allLessons.map(l => l._id);
     const userProgress = await Progress.find({
       userId,
-      lessonId: { $in: lessonIds }
-    })
-      .select("lessonId")
-      .lean();
+      contentId: { $in: allContentIds } // Using contentId now!
+    }).select("contentId").lean();
 
-    const completedLessonIds = new Set(
-      userProgress.map(p => p.lessonId.toString())
+    // Create a Set for O(1) lookup speed
+    const completedContentIds = new Set(
+      userProgress.map(p => p.contentId.toString())
     );
 
-    // 5. Group Lessons by Topic ID for easy mapping
-    const lessonsByTopic = new Map<string, any[]>();
-    allLessons.forEach(lesson => {
-      const tid = lesson.topicId.toString();
-      if (!lessonsByTopic.has(tid)) lessonsByTopic.set(tid, []);
-      lessonsByTopic.get(tid)!.push(lesson);
-    });
+    // 5. Group Content by Topic
+    const groupById = (items: any[]) => {
+      const map = new Map<string, any[]>();
+      items.forEach(item => {
+        const tid = item.topicId.toString();
+        if (!map.has(tid)) map.set(tid, []);
+        map.get(tid)!.push(item);
+      });
+      return map;
+    };
 
-    // 5.1 Group Dialogues by Topic ID
-    const dialoguesByTopic = new Map<string, any[]>();
-    allDialogues.forEach((dialogue: any) => {
-      const tid = dialogue.topicId.toString();
-      if (!dialoguesByTopic.has(tid)) dialoguesByTopic.set(tid, []);
-      dialoguesByTopic.get(tid)!.push(dialogue);
-    });
+    const lessonsByTopic = groupById(allLessons);
+    const dialoguesByTopic = groupById(allDialogues);
+    const writingByTopic = groupById(allWriting);
+    const speakingByTopic = groupById(allSpeaking);
 
-    // 5.2 Group Writing Exercises by Topic ID
-    const writingExercisesByTopic = new Map<string, any[]>();
-    allWritingExercises.forEach((exercise: any) => {
-      const tid = exercise.topicId.toString();
-      if (!writingExercisesByTopic.has(tid)) writingExercisesByTopic.set(tid, []);
-      writingExercisesByTopic.get(tid)!.push(exercise);
-    });
-
-    // 5.3 Group Speaking Exercises by Topic ID
-    const speakingExercisesByTopic = new Map<string, any[]>();
-    allSpeakingExercises.forEach((exercise: any) => {
-      const tid = exercise.topicId.toString();
-      if (!speakingExercisesByTopic.has(tid)) speakingExercisesByTopic.set(tid, []);
-      speakingExercisesByTopic.get(tid)!.push(exercise);
-    });
-
-    // 6. Build the Final "Journey" Response
-    // We use a global "foundActive" flag to ensure only ONE lesson 
-    // across the entire feed is marked as 'active' (the current one to play).
+    // 6. Build the Journey
     let globalActiveFound = false;
 
     const topicsWithPath = topics.map(topic => {
-      const topicLessons = lessonsByTopic.get(topic._id.toString()) || [];
-      const topicDialogues = dialoguesByTopic.get(topic._id.toString()) || [];
-      const topicWritingExercises = writingExercisesByTopic.get(topic._id.toString()) || [];
-      const topicSpeakingExercises = speakingExercisesByTopic.get(topic._id.toString()) || [];
+      const tId = topic._id.toString();
       
-      const processedLessons = topicLessons.map(l => {
-        const isCompleted = completedLessonIds.has(l._id.toString());
+      // Define the "Internal Order" for this specific topic
+      // You can adjust this order based on how you want to teach
+      const rawSequence = [
+        ...(lessonsByTopic.get(tId) || []).map(l => ({ ...l, type: 'LESSON' })),
+        ...(dialoguesByTopic.get(tId) || []).map(d => ({ ...d, type: 'DIALOGUE', title: d.scenario })),
+        ...(writingByTopic.get(tId) || []).map(w => ({ ...w, type: 'WRITING', title: w.prompt?.am || w.type })),
+        ...(speakingByTopic.get(tId) || []).map(s => ({ ...s, type: 'SPEAKING', title: s.prompt?.am || "Speech" }))
+      ];
+
+      // Apply Status Logic to the combined sequence
+      const processedSequence = rawSequence.map(item => {
+        const isCompleted = completedContentIds.has(item._id.toString());
         let status = "locked";
 
         if (isCompleted) {
           status = "completed";
         } else if (!globalActiveFound) {
           status = "active";
-          globalActiveFound = true; // All subsequent lessons in all topics stay 'locked'
+          globalActiveFound = true; 
         }
 
         return {
-          _id: l._id,
-          title: l.title,
+          _id: item._id,
+          title: item.title,
+          type: item.type,
           status
         };
       });
 
-      const processedDialogues = topicDialogues.map((d: any) => ({
-        _id: d._id,
-        title: d.scenario,
-      }));
+      // Handle the Topic Test (The Final Gatekeeper)
+      let testStatus = "locked";
+      const allTasksDone = processedSequence.every(n => n.status === "completed");
+      
+      if (allTasksDone && !globalActiveFound) {
+        testStatus = "active";
+        globalActiveFound = true;
+      } else if (allTasksDone && globalActiveFound) {
+        // This means the user finished this topic, but is stuck on a later one
+        testStatus = "completed"; 
+      }
 
-      const processedWritingExercises = topicWritingExercises.map((e: any) => ({
-        _id: e._id,
-        title: e.prompt ? (e.prompt.am || e.prompt.ao || e.type) : e.type, 
-      }));
-
-      const processedSpeakingExercises = topicSpeakingExercises.map((e: any) => ({
-        _id: e._id,
-        title: e.prompt ? (e.prompt.am || e.prompt.ao) : (e.expectedText?.am || e.expectedText?.ao || "Speaking Exercise"),
-      }));
-
-      const total = topicLessons.length;
-      const completedCount = processedLessons.filter(l => l.status === "completed").length;
+      const total = processedSequence.length;
+      const completedCount = processedSequence.filter(n => n.status === "completed").length;
 
       return {
         _id: topic._id,
         title: topic.title,
         level: topic.level,
-        lessons: processedLessons,
-        dialogues: processedDialogues,
-        writingExercises: processedWritingExercises,
-        speakingExercises: processedSpeakingExercises,
-        progress: {
-          completedLessons: completedCount,
-          totalLessons: total,
-          percentage: total > 0 ? Math.round((completedCount / total) * 100) : 0
+        pathNodes: processedSequence, // Frontend can now map this single array
+        topicTest: {
+          title: "Unit Review",
+          status: testStatus
         },
-        isCompleted: total > 0 && completedCount === total
+        progress: {
+          completedCount,
+          totalCount: total,
+          percentage: total > 0 ? Math.round((completedCount / total) * 100) : 0
+        }
       };
     });
 
-    // 7. Return with Pagination Metadata
     return res.json({
       success: true,
       data: {
