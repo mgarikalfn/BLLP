@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  reviewLesson,
+  reviewFlashcard,
   getDueLessons,
   startStudySession,
   getStudyStats,
@@ -32,11 +32,14 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [lessonId, quality]
+ *             required: [targetId, type, quality]
  *             properties:
- *               lessonId:
+ *               targetId:
  *                 type: string
- *                 description: Lesson ObjectId
+ *                 description: Vocabulary ObjectId
+ *               type:
+ *                 type: string
+ *                 enum: [VOCABULARY]
  *               quality:
  *                 type: integer
  *                 minimum: 0
@@ -46,7 +49,7 @@ const router = Router();
  *       200:
  *         description: Success
  */
-router.post("/review", authenticate, reviewLesson);
+router.post("/review", authenticate, reviewFlashcard);
 
 
 /**

@@ -124,7 +124,13 @@ export const login = async (req: Request, res: Response) => {
       role: user.role,
     });
 
-    res.json({ token, id: user._id.toString(), username: user.username });
+    res.json({
+      token,
+      id: user._id.toString(),
+      username: user.username,
+      role: user.role,
+      learningDirection: user.learningDirection,
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error", error: error instanceof Error ? error.message : String(error) });

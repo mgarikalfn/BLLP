@@ -15,12 +15,18 @@ interface AuthRequest extends Request {
   };
 }
 
-export const reviewLesson = async (req: Request, res: Response) => {
+export const reviewFlashcard = async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
 
   try {
-    const { lessonId, quality } = req.body;
+    const { targetId, type, quality } = req.body;
+
+    if (type !== "VOCABULARY") {
+      return res.status(400).json({
+        message: "Only VOCABULARY flashcards are supported by this endpoint",
+      });
+    }
 
     if (quality < 0 || quality > 5) {
       return res.status(400).json({
@@ -31,15 +37,15 @@ export const reviewLesson = async (req: Request, res: Response) => {
     // ===== PROGRESS (SM-2) =====
     let progress = await Progress.findOne({
       userId,
-      contentId: lessonId,
-      contentType: "LESSON",
+      contentId: targetId,
+      contentType: "VOCABULARY",
     });
 
     if (!progress) {
       progress = new Progress({
         userId,
-        contentId: lessonId,
-        contentType: "LESSON",
+        contentId: targetId,
+        contentType: "VOCABULARY",
       });
     }
 
@@ -129,7 +135,9 @@ export const reviewLesson = async (req: Request, res: Response) => {
 
     // ===== RESPONSE =====
     return res.json({
-      message: "Review recorded",
+      message: "Flashcard review recorded",
+      targetId,
+      type,
       nextReview: progress.nextReview,
       streak: stats.currentStreak,
       todayCount: stats.todayCount,
@@ -146,6 +154,8 @@ export const reviewLesson = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const reviewLesson = reviewFlashcard;
 
 export const getDueLessons = async (req: Request, res: Response) => {
   try {
@@ -186,84 +196,83 @@ export const startStudySession = async (req: Request, res: Response) => {
     // ===== FETCH POOLS =====
     const dueProgress = await Progress.find({
       userId,
-      contentType: "LESSON",
+      contentType: "VOCABULARY",
       nextReview: { $lte: now },
     }).lean();
 
     const weakProgress = await Progress.find({
       userId,
-      contentType: "LESSON",
+      contentType: "VOCABULARY",
       easeFactor: { $lt: 2.0 },
       nextReview: { $gt: now },
     }).lean();
 
-    const seenProgress = await Progress.find({ userId, contentType: "LESSON" })
+    const seenProgress = await Progress.find({ userId, contentType: "VOCABULARY" })
       .select("contentId")
       .lean();
-    const seenIds = seenProgress.map((p: any) => p.contentId.toString());
+    const seenIds = new Set(seenProgress.map((p: any) => p.contentId.toString()));
 
-    const newLessons = await Lesson.find({
-      _id: { $nin: seenIds },
-      isVerified: true,
-    });
+    const lessons = await Lesson.find({ isVerified: true }).lean();
 
-    // ===== EXTRACT LESSON OBJECTS =====
-    const pooledLessonIds = Array.from(
-      new Set(
-        [...dueProgress, ...weakProgress].map((p: any) => p.contentId.toString()),
-      ),
+    const allVocabulary = lessons.flatMap((lesson: any) =>
+      (lesson.vocabulary || []).map((vocab: any) => ({
+        lessonId: lesson._id.toString(),
+        vocabId: vocab._id.toString(),
+        am: vocab.am,
+        ao: vocab.ao,
+      })),
     );
 
-    const pooledLessons = await Lesson.find({ _id: { $in: pooledLessonIds } }).lean();
-    const lessonMap = new Map(pooledLessons.map((lesson: any) => [lesson._id.toString(), lesson]));
+    const vocabularyMap = new Map(
+      allVocabulary.map((vocab) => [vocab.vocabId, vocab]),
+    );
 
-    const dueLessons = dueProgress
-      .map((p: any) => lessonMap.get(p.contentId.toString()))
+    const newVocabulary = allVocabulary.filter((vocab) => !seenIds.has(vocab.vocabId));
+
+    const dueVocabulary = dueProgress
+      .map((p: any) => vocabularyMap.get(p.contentId.toString()))
       .filter(Boolean);
-    const weakLessons = weakProgress
-      .map((p: any) => lessonMap.get(p.contentId.toString()))
+
+    const weakVocabulary = weakProgress
+      .map((p: any) => vocabularyMap.get(p.contentId.toString()))
       .filter(Boolean);
 
     // Shuffle helper
     const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
 
-    const shuffledDue = shuffle([...dueLessons]);
-    const shuffledWeak = shuffle([...weakLessons]);
-    const shuffledNew = shuffle([...newLessons]);
+    const shuffledDue = shuffle([...dueVocabulary]);
+    const shuffledWeak = shuffle([...weakVocabulary]);
+    const shuffledNew = shuffle([...newVocabulary]);
 
-    // ... Shuffling code stays same ...
-
-    // ===== SENIOR PICKING LOGIC =====
-    // We prioritize Due, then Weak, then New until we hit the LIMIT.
+    // Prioritize due cards first, then weak, then unseen cards.
     const combinedPool = [
       ...shuffledDue,
       ...shuffledWeak,
       ...shuffledNew
     ];
 
-    const sessionLessons: any[] = [];
+    const sessionFlashcards: any[] = [];
     const usedIds = new Set<string>();
 
-    for (const lesson of combinedPool) {
-      if (sessionLessons.length >= limit) break; // Fill up to the limit (e.g., 10)
+    for (const flashcard of combinedPool) {
+      if (sessionFlashcards.length >= limit) break;
       
-      const id = lesson._id.toString();
+      const id = flashcard.vocabId;
       if (!usedIds.has(id)) {
-        sessionLessons.push(lesson);
+        sessionFlashcards.push(flashcard);
         usedIds.add(id);
       }
     }
 
-    // Final check: if still empty, your Lesson collection might be empty or unverified
     return res.json({
-      lessons: sessionLessons,
-      userStats: authReq.user, // Ensure this matches your frontend UserStats interface!
+      flashcards: sessionFlashcards,
+      userStats: authReq.user,
       breakdown: {
         due: shuffledDue.length,
         weak: shuffledWeak.length,
         new: shuffledNew.length,
       },
-      total: sessionLessons.length,
+      total: sessionFlashcards.length,
     });
   } catch (error) {
     console.error(error);

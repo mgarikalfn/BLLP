@@ -5,7 +5,13 @@ export interface IProgress {
   
   // Generic reference to the content being tracked
   contentId: Types.ObjectId; 
-  contentType: 'LESSON' | 'DIALOGUE' | 'WRITING' | 'SPEAKING' | 'TOPIC_TEST';
+  contentType:
+    | 'LESSON'
+    | 'VOCABULARY'
+    | 'DIALOGUE'
+    | 'WRITING'
+    | 'SPEAKING'
+    | 'TOPIC_TEST';
 
   // Spaced Repetition (Mainly used for Lessons/Vocab)
   repetition: number;
@@ -25,7 +31,7 @@ const progressSchema = new Schema<IProgress>(
     contentId: { type: Schema.Types.ObjectId, required: true },
     contentType: { 
       type: String, 
-      enum: ['LESSON', 'DIALOGUE', 'WRITING', 'SPEAKING', 'TOPIC_TEST'], 
+      enum: ['LESSON', 'VOCABULARY', 'DIALOGUE', 'WRITING', 'SPEAKING', 'TOPIC_TEST'], 
       required: true 
     },
 
