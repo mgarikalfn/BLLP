@@ -18,7 +18,7 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, password, username, targetLang, proficiency]
+ *             required: [email, password, username, targetLanguage, proficiencyLevel]
  *             properties:
  *               email:
  *                 type: string
@@ -27,10 +27,20 @@ const router = Router();
  *                 type: string
  *               username:
  *                 type: string
- *               targetLang:
+ *               targetLanguage:
  *                 type: string
- *               proficiency:
+ *                 enum: [AMHARIC, OROMO]
+ *               proficiencyLevel:
  *                 type: string
+ *                 enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+ *               learningDirection:
+ *                 type: string
+ *                 enum: [AM_TO_OR, OR_TO_AM]
+ *               avatarUrl:
+ *                 type: string
+ *               bio:
+ *                 type: string
+ *                 maxLength: 160
  *     responses:
  *       201:
  *         description: User registered

@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./config/db";
 import authRoutes from "./modules/auth/auth.routes";
 import userRoutes from "./modules/user/user.routes";
+import profileRoutes from "./modules/user/profile.routes";
 import { ENV } from "./config/env";
 import path from "path";
 import topicRoutes from "./modules/content/topic.routes";
@@ -85,6 +86,7 @@ app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/profile", profileRoutes);
 
 app.use("/api/topics", topicRoutes);
 app.use("/api/lessons", lessonRoutes);

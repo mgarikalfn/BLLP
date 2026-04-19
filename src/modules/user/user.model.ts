@@ -37,6 +37,9 @@ export interface IUser extends Document {
   targetLanguage: targetLanguage;
   learningDirection: LearningDirection;
   avatarUrl?: string;
+  bio?:string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const userSchema = new Schema<IUser>(
@@ -72,6 +75,10 @@ const userSchema = new Schema<IUser>(
     avatarUrl: {
       type: String,
       required: false,
+    },
+    bio:{
+      type:String,
+      required:false,
     },
   },
   { timestamps: true },
