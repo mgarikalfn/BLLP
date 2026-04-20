@@ -19,6 +19,8 @@ import dialogueRoutes from "./modules/dialogue/dialogue.routes";
 import writingRoutes from "./modules/writtingExercise/writtingExercise.routes";
 import speakingRoutes from "./modules/speaking/speaking.routes";
 import aiRoutes from "./modules/ai/ai.routes";
+import notificationRoutes from "./modules/notifications/notification.routes";
+import { startNotificationJobs } from "./cron/notification.jobs";
 import { v2 as cloudinary } from 'cloudinary';
 import swaggerJsdoc from "swagger-jsdoc";
 import  swaggerUi from 'swagger-ui-express';
@@ -101,11 +103,13 @@ app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/writing",writingRoutes);
 app.use("/api/speaking", speakingRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");
 });
 
 app.listen(ENV.PORT, () => {
+  startNotificationJobs();
   console.log(`Server running on port ${ENV.PORT}`);
 });
