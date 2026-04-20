@@ -17,6 +17,21 @@ export interface DictionaryResult {
   tip: string;
 }
 
+export interface ChatMessageInput {
+  role: "user" | "model";
+  content: string;
+}
+
+export interface ChatRequestInput {
+  messages: ChatMessageInput[];
+  topicId?: string;
+  learningDirection: string;
+}
+
+export interface ChatResult {
+  response: string;
+}
+
 class DictionaryServiceError extends Error {
   statusCode: number;
 
@@ -38,7 +53,10 @@ export class AIDictionaryService {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private static getModel(modelName: string) {
+  private static getModel(
+    modelName: string,
+    options?: { responseMimeType?: "application/json" | "text/plain" },
+  ) {
     const apiKey = (process.env.GEMINI_API_KEY || "").trim();
 
     if (!apiKey) {
@@ -53,7 +71,9 @@ export class AIDictionaryService {
     return genAI.getGenerativeModel({
       model: modelName,
       generationConfig: {
-        responseMimeType: "application/json",
+        ...(options?.responseMimeType
+          ? { responseMimeType: options.responseMimeType }
+          : {}),
         temperature: 0.3,
       },
     });
@@ -80,6 +100,20 @@ export class AIDictionaryService {
       "learningDirection must be AM_TO_OR or OR_TO_AM",
       400,
     );
+  }
+
+  private static getLanguagePair(direction: LearningDirection) {
+    if (direction === "AM_TO_OR") {
+      return {
+        nativeLang: "Amharic",
+        targetLang: "Afan Oromo",
+      };
+    }
+
+    return {
+      nativeLang: "Afan Oromo",
+      targetLang: "Amharic",
+    };
   }
 
   private static async getTopicContext(topicId?: string) {
@@ -226,21 +260,112 @@ export class AIDictionaryService {
     }
 
     const direction = this.normalizeDirection(input.learningDirection);
+    const { nativeLang, targetLang } = this.getLanguagePair(direction);
     const { topicTitle, grammarNotes } = await this.getTopicContext(input.topicId);
 
-    const systemPrompt = `You are a bilingual tutor for Amharic and Afan Oromo.
-The user's direction is ${direction}.
-The current topic is ${topicTitle}.
+    const systemPrompt = `You are a bilingual tutor.
+The user is a native ${nativeLang} speaker learning ${targetLang}.
+Current topic: ${topicTitle}
 Relevant grammar notes: ${grammarNotes}
-Explain the word "${text}".
-Return ONLY a strict JSON object with exactly these keys:
+Explain the word "${text}" ONLY in ${nativeLang}.
+Do not use English words in explanations, tips, or reasoning.
+
+Return ONLY a strict JSON object:
 {
-  "translation": string,
-  "pronunciation_hint": string,
-  "usage_example": string,
-  "tip": string
-}
-The tip must be exactly one sentence and include either a cultural note or grammar note.`;
+  "translation": "The direct translation in ${nativeLang}",
+  "pronunciation_hint": "How to say it written in ${nativeLang} script/letters",
+  "usage_example": "A sentence in ${targetLang} with its translation in ${nativeLang}",
+  "tip": "A one-sentence grammar/cultural tip strictly in ${nativeLang}"
+}`;
+
+    const modelsToTry = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL].filter(
+      (model, index, list) => !!model && list.indexOf(model) === index,
+    );
+
+    let lastError: any = null;
+
+    for (const modelName of modelsToTry) {
+      const model = this.getModel(modelName, {
+        responseMimeType: "application/json",
+      });
+
+      for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+          const result = await model.generateContent(systemPrompt);
+          const raw = result.response.text();
+          return this.parseAndValidate(raw);
+        } catch (error: any) {
+          if (error instanceof DictionaryServiceError) {
+            throw error;
+          }
+
+          lastError = error;
+
+          const canRetry = this.isTransientGeminiError(error) && attempt < RETRY_DELAYS_MS.length;
+          if (canRetry) {
+            await this.sleep(RETRY_DELAYS_MS[attempt]);
+            continue;
+          }
+
+          if (!this.isTransientGeminiError(error)) {
+            throw this.classifyGeminiError(error);
+          }
+
+          break;
+        }
+      }
+    }
+
+    throw this.classifyGeminiError(lastError);
+  }
+
+  static async getChatResponse(input: ChatRequestInput): Promise<ChatResult> {
+    const direction = this.normalizeDirection(input.learningDirection);
+    const { nativeLang, targetLang } = this.getLanguagePair(direction);
+    const { topicTitle, grammarNotes } = await this.getTopicContext(input.topicId);
+
+    if (!Array.isArray(input.messages) || input.messages.length === 0) {
+      throw new DictionaryServiceError("messages is required", 400);
+    }
+
+    const history = input.messages
+      .map((message) => ({
+        role: message?.role,
+        content: (message?.content || "").trim(),
+      }))
+      .filter(
+        (message): message is ChatMessageInput =>
+          (message.role === "user" || message.role === "model") &&
+          message.content.length > 0,
+      );
+
+    if (history.length === 0) {
+      throw new DictionaryServiceError("messages must contain valid content", 400);
+    }
+
+    const systemInstruction = `You are a friendly AI Tutor.
+The user's native language is ${nativeLang} and they are learning ${targetLang}.
+Current topic: ${topicTitle}
+Relevant grammar notes: ${grammarNotes}
+Speak to the user primarily in ${nativeLang} when explaining rules or giving feedback.
+Encourage them to practice in ${targetLang}.
+If they make a mistake in ${targetLang}, correct them by explaining WHY using ${nativeLang}.
+Strict rule: Do not use English in explanations, tips, or correction logic.`;
+
+    const geminiContents = [
+      {
+        role: "user" as const,
+        parts: [{ text: systemInstruction }],
+      },
+      {
+        role: "model" as const,
+        parts: [{ text: `ተቀባይነት አግኝቻለሁ / Hubadhe.` }],
+      },
+      ...history.map((message) => ({
+        role: message.role,
+        parts: [{ text: message.content }],
+      })),
+    ];
 
     const modelsToTry = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL].filter(
       (model, index, list) => !!model && list.indexOf(model) === index,
@@ -253,9 +378,16 @@ The tip must be exactly one sentence and include either a cultural note or gramm
 
       for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
         try {
-          const result = await model.generateContent(systemPrompt);
-          const raw = result.response.text();
-          return this.parseAndValidate(raw);
+          const result = await model.generateContent({
+            contents: geminiContents,
+          } as any);
+          const text = result.response.text().trim();
+
+          if (!text) {
+            throw new DictionaryServiceError("Empty AI response", 502);
+          }
+
+          return { response: text };
         } catch (error: any) {
           if (error instanceof DictionaryServiceError) {
             throw error;

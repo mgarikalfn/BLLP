@@ -29,3 +29,29 @@ export const dictionaryLookup = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const chatWithTutor = async (req: Request, res: Response) => {
+  try {
+    const { messages, topicId, learningDirection } = req.body;
+
+    const result = await AIDictionaryService.getChatResponse({
+      messages,
+      topicId,
+      learningDirection,
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    if (error instanceof DictionaryServiceError) {
+      return res.status(error.statusCode).json({
+        message: error.message,
+        details: error.details,
+      });
+    }
+
+    console.error("AI chat error:", error);
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
