@@ -4,6 +4,7 @@ import { SpeakingEvaluationService } from "./speakingEvaluation.service";
 import { SpeakingAttempt } from "./speakingAttempt.model";
 import { SpeakingExercise } from "./speakingExercise.model";
 import { Progress } from "../study/progress.model";
+import { updateQuestProgress, updateAchievementProgress } from "../../services/achievement.service";
 
 const speakingLevels = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
 
@@ -351,7 +352,24 @@ export const submitSpeakingExercise = async (req: Request, res: Response) => {
       }
     );
 
-    // 4. Return the Evaluation Results
+    // 4. Update Streak & Fire quest + achievement progress in background
+    setImmediate(async () => {
+      try {
+        const userId = (req as any).user.id as string;
+        const { updateStreakAndDailyGoal } = require("../../services/streak.service");
+        await updateStreakAndDailyGoal(userId);
+
+        await updateQuestProgress(userId, "LESSONS", 1);
+        await updateAchievementProgress(userId, "SPEAKING", 1);
+        if (normalizedIsCorrect) {
+          await updateQuestProgress(userId, "ACCURACY", 1);
+        }
+      } catch (err) {
+        console.error("[Speaking] Background quest update failed", err);
+      }
+    });
+
+    // 5. Return the Evaluation Results
     return res.status(200).json({
       success: true,
       message: messages.evaluated,

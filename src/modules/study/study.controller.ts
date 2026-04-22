@@ -7,6 +7,7 @@ import { User } from "../user/user.model";
 import { CURRENT_SEASON } from "./season.config";
 import { calculateTier } from "./tier.utils";
 import { getSeasonReward } from "./season.rewards";
+import { updateAchievementProgress } from "../../services/achievement.service";
 
 interface AuthRequest extends Request {
   user?: {
@@ -67,39 +68,8 @@ export const reviewFlashcard = async (req: Request, res: Response) => {
     await progress.save();
 
     // ===== STREAK & DAILY GOAL =====
-    let stats = await StudyStats.findOne({ userId });
-
-    if (!stats) {
-      stats = new StudyStats({ userId });
-    }
-
-    const today = getStartOfDay(new Date());
-    const lastStudy = stats.lastStudyDate
-      ? getStartOfDay(stats.lastStudyDate)
-      : null;
-
-    if (!lastStudy) {
-      stats.currentStreak = 1;
-      stats.todayCount = 1;
-    } else {
-      const diffDays =
-        (today.getTime() - lastStudy.getTime()) / (1000 * 60 * 60 * 24);
-
-      if (diffDays === 0) {
-        stats.todayCount += 1;
-      } else if (diffDays === 1) {
-        stats.currentStreak += 1;
-        stats.todayCount = 1;
-      } else {
-        stats.currentStreak = 1;
-        stats.todayCount = 1;
-      }
-    }
-
-    stats.longestStreak = Math.max(stats.longestStreak, stats.currentStreak);
-
-    stats.lastStudyDate = new Date();
-    await stats.save();
+    const { updateStreakAndDailyGoal } = require("../../services/streak.service");
+    let stats = await updateStreakAndDailyGoal(userId);
 
     if (stats.seasonId !== CURRENT_SEASON.id) {
       stats.seasonId = CURRENT_SEASON.id;
@@ -132,6 +102,25 @@ export const reviewFlashcard = async (req: Request, res: Response) => {
     stats.level = newLevel;
 
     await stats.save();
+
+    // Trigger achievement progress in background
+    setImmediate(async () => {
+      try {
+        const { updateAchievementProgress, updateQuestProgress } = require("../../services/achievement.service");
+        
+        await updateAchievementProgress(userId, "LESSONS", 1); // 1 lesson finished
+        await updateAchievementProgress(userId, "STREAK", stats.currentStreak); // pass total streak exactly or bump by 1 if you defined increment
+        await updateAchievementProgress(userId, "TOTAL_XP", xpEarned); 
+        
+        await updateQuestProgress(userId, "LESSONS", 1);
+        await updateQuestProgress(userId, "XP", xpEarned);
+        if (quality === 5) {
+          await updateQuestProgress(userId, "ACCURACY", 1);
+        }
+      } catch (err) {
+        console.error("Background achievement update failed", err);
+      }
+    });
 
     // ===== RESPONSE =====
     return res.json({
@@ -244,11 +233,16 @@ export const startStudySession = async (req: Request, res: Response) => {
     const shuffledWeak = shuffle([...weakVocabulary]);
     const shuffledNew = shuffle([...newVocabulary]);
 
-    // Prioritize due cards first, then weak, then unseen cards.
+    // Gather random seen vocabulary to pad the session
+    const seenVocabulary = allVocabulary.filter(vocab => seenIds.has(vocab.vocabId));
+    const shuffledSeen = shuffle([...seenVocabulary]);
+
+    // Prioritize due cards first, then weak, then unseen cards, then random casual practice.
     const combinedPool = [
       ...shuffledDue,
       ...shuffledWeak,
-      ...shuffledNew
+      ...shuffledNew,
+      ...shuffledSeen
     ];
 
     const sessionFlashcards: any[] = [];

@@ -3,6 +3,7 @@ import { WritingExercise } from "./writingExercise.model";
 import { WritingAttempt } from "./WritingAttempt.model";
 import { WritingEvaluationService } from "./writingEvaluation.service";
 import { Progress } from "../study/progress.model";
+import { updateQuestProgress, updateAchievementProgress } from "../../services/achievement.service";
 
 export const submitWritingExercise = async (req: Request, res: Response) => {
   try {
@@ -57,7 +58,23 @@ export const submitWritingExercise = async (req: Request, res: Response) => {
       }
     );
 
-    // 3. Return a Rich Response
+    // 3. Update Streak & Fire quest + achievement progress in background
+    setImmediate(async () => {
+      try {
+        const { updateStreakAndDailyGoal } = require("../../services/streak.service");
+        await updateStreakAndDailyGoal(userId);
+
+        await updateQuestProgress(userId, "LESSONS", 1);
+        await updateAchievementProgress(userId, "WRITING", 1);
+        if (evaluation.isCorrect) {
+          await updateQuestProgress(userId, "ACCURACY", 1);
+        }
+      } catch (err) {
+        console.error("[Writing] Background quest update failed", err);
+      }
+    });
+
+    // 4. Return a Rich Response
     return res.status(200).json({
       success: true,
       data: {

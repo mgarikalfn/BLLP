@@ -1,4 +1,6 @@
 import express from "express";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
@@ -20,7 +22,11 @@ import writingRoutes from "./modules/writtingExercise/writtingExercise.routes";
 import speakingRoutes from "./modules/speaking/speaking.routes";
 import aiRoutes from "./modules/ai/ai.routes";
 import notificationRoutes from "./modules/notifications/notification.routes";
+import economyRoutes from "./modules/economy/economy.routes";
+import chatRoutes from "./modules/chat/chat.routes";
+import reportRoutes from "./modules/chat/report.routes";
 import { startNotificationJobs } from "./cron/notification.jobs";
+import { startQuestJobs } from "./cron/quest.jobs";
 import { v2 as cloudinary } from 'cloudinary';
 import swaggerJsdoc from "swagger-jsdoc";
 import  swaggerUi from 'swagger-ui-express';
@@ -38,6 +44,50 @@ cloudinary.config({
 connectDB();
 
 const app = express();
+const server = http.createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: "*", // Adjust this in production
+    methods: ["GET", "POST"]
+  }
+});
+
+// Setup Socket.IO for chat
+io.on("connection", (socket) => {
+  console.log("New socket connection:", socket.id);
+
+  socket.on("join_conversation", (conversationId) => {
+    socket.join(conversationId);
+    console.log(`Socket ${socket.id} joined conversation ${conversationId}`);
+  });
+
+  socket.on("send_message", async (data) => {
+    const { conversationId, senderId, text } = data;
+    try {
+      // Lazy load to avoid circular dependency
+      const { Message, Conversation } = require("./modules/chat/chat.models");
+      
+      const newMessage = await Message.create({
+        conversationId,
+        senderId,
+        text
+      });
+
+      await Conversation.findByIdAndUpdate(conversationId, {
+        lastMessageAt: new Date()
+      });
+
+      // Broadcast to everyone in the room (including sender to confirm)
+      io.to(conversationId).emit("receive_message", newMessage);
+    } catch (error) {
+      console.error("Socket send_message error:", error);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Socket disconnected:", socket.id);
+  });
+});
 
 
 // Swagger definition
@@ -104,12 +154,16 @@ app.use("/api/writing",writingRoutes);
 app.use("/api/speaking", speakingRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/economy", economyRoutes);
+app.use("/api/chat", chatRoutes);
+app.use("/api/reports", reportRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");
 });
 
-app.listen(ENV.PORT, () => {
+server.listen(ENV.PORT, () => {
   startNotificationJobs();
+  startQuestJobs();
   console.log(`Server running on port ${ENV.PORT}`);
 });
