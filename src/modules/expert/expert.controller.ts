@@ -19,10 +19,14 @@ type FetchFilter = Record<string, unknown>;
 
 type TitleBuilder = (item: any) => string;
 
-const asParam = (value: string | string[] | undefined) =>
-  Array.isArray(value) ? value[0] : value;
+const asParam = (value: any): string | undefined => {
+  if (Array.isArray(value)) {
+    return typeof value[0] === "string" ? value[0] : undefined;
+  }
+  return typeof value === "string" ? value : undefined;
+};
 
-const isValidObjectId = (value?: string) => !!value && Types.ObjectId.isValid(value);
+const isValidObjectId = (value?: string): value is string => !!value && Types.ObjectId.isValid(value);
 
 const normalizeType = (value?: string) => (value ? value.toUpperCase() : undefined);
 

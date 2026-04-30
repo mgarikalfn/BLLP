@@ -137,10 +137,10 @@ Generate 6-8 dialogue lines. Make 2-3 of them interactive with questions. Use re
       return `You are a bilingual writing exercise designer for Amharic and Afan Oromo.
 Generate a writing exercise for the topic "${topicTitle}" at ${level} level.
 
-Return ONLY valid JSON matching this exact structure:
+Return ONLY valid JSON matching this exact structure. Note the type can be either "TRANSLATION" or "OPEN_PROMPT":
 {
-  "type": "TRANSLATION",
-  "prompt": { "am": "The instruction in Amharic", "ao": "The instruction in Oromo" },
+  "type": "TRANSLATION", // or "OPEN_PROMPT"
+  "prompt": { "am": "The instruction or open ended prompt in Amharic", "ao": "The instruction or open ended prompt in Oromo" },
   "hints": [
     { "am": "Hint in Amharic", "ao": "Hint in Oromo" }
   ],
@@ -170,7 +170,10 @@ Type "MATCHING":
 { "type": "MATCHING", "intendedFor": "TEST", "content": { "prompt": { "am": "...", "ao": "..." }, "pairs": [{ "left": "Amharic word", "right": "Oromo translation" }] } }
 
 Type "SCRAMBLE":
-{ "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "correctSentence": "Full sentence", "scrambled": ["word3", "word1", "word2"] } }
+{ "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "scrambleAm": { "words": ["..."], "answer": "..." }, "scrambleOr": { "words": ["..."], "answer": "..." } } }
+
+Type "CLOZE":
+{ "type": "CLOZE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "textWithBlank": { "am": "...", "ao": "..." }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
 
 Mix the types. Generate exactly 3 questions.`;
 
