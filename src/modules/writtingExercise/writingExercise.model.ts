@@ -18,6 +18,9 @@ export interface IWritingExercise extends Document {
   };
   level: DifficultyLevel;
   isVerified: boolean;
+  status?: "DRAFT" | "NEEDS_REVIEW" | "PUBLISHED";
+  generatedByAI?: boolean;
+  authorId?: Types.ObjectId;
 }
 
 const writingExerciseSchema = new Schema<IWritingExercise>(
@@ -44,6 +47,13 @@ const writingExerciseSchema = new Schema<IWritingExercise>(
       default: DifficultyLevel.BEGINNER,
     },
     isVerified: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["DRAFT", "NEEDS_REVIEW", "PUBLISHED"],
+      default: "DRAFT",
+    },
+    generatedByAI: { type: Boolean, default: false },
+    authorId: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

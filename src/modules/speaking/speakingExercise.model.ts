@@ -27,7 +27,14 @@ const speakingExerciseSchema = new mongoose.Schema(
       am: { type: String },
       ao: { type: String },
     },
-    isVerified: { type: Boolean, default: false }
+    isVerified: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["DRAFT", "NEEDS_REVIEW", "PUBLISHED"],
+      default: "DRAFT",
+    },
+    generatedByAI: { type: Boolean, default: false },
+    authorId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

@@ -39,6 +39,9 @@ export interface ILesson extends Document {
   }>;
 
   isVerified: boolean;
+  status?: "DRAFT" | "NEEDS_REVIEW" | "PUBLISHED";
+  generatedByAI?: boolean;
+  authorId?: Types.ObjectId;
 }
 
 const lessonSchema = new Schema<ILesson>(
@@ -87,6 +90,13 @@ const lessonSchema = new Schema<ILesson>(
       },
     ],
     isVerified: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["DRAFT", "NEEDS_REVIEW", "PUBLISHED"],
+      default: "DRAFT",
+    },
+    generatedByAI: { type: Boolean, default: false },
+    authorId: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
 );
