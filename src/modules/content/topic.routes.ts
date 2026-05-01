@@ -174,8 +174,42 @@ router.delete(
  *       200:
  *         description: Success
  */
-router.get("/:topicId/test", getTopicTest);
+router.get("/:topicId/test", authenticate, getTopicTest);
 
+/**
+ * @openapi
+ * /api/topics/{topicId}/test/submit:
+ *   post:
+ *     tags:
+ *       - Content
+ *     summary: POST /:topicId/test/submit
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: topicId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Topic ObjectId
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [passed, score]
+ *             properties:
+ *               passed:
+ *                 type: boolean
+ *               score:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+import { submitTopicTest } from "./topic.controller";
+router.post("/:topicId/test/submit", authenticate, submitTopicTest);
 
 /**
  * @openapi

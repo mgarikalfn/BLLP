@@ -51,8 +51,8 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
 
     const userProgress = await Progress.find({
       userId,
-      contentId: { $in: allContentIds },
-      contentType: { $in: ["LESSON", "DIALOGUE", "WRITING", "SPEAKING"] },
+      contentId: { $in: [...allContentIds, ...topicIds] },
+      contentType: { $in: ["LESSON", "DIALOGUE", "WRITING", "SPEAKING", "TOPIC_TEST"] },
     }).select("contentId contentType").lean();
 
     // Create a composite-key Set for O(1) lookup speed and type-safe completion checks.
@@ -115,13 +115,21 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
       // Handle the Topic Test (The Final Gatekeeper)
       let testStatus = "locked";
       const allTasksDone = processedSequence.every(n => n.status === "completed");
+      const isTestCompleted = completedContentKeys.has(`TOPIC_TEST:${tId}`);
       
-      if (allTasksDone && !globalActiveFound) {
+      if (isTestCompleted) {
+        testStatus = "completed";
+      } else if (allTasksDone && !globalActiveFound) {
         testStatus = "active";
         globalActiveFound = true;
       } else if (allTasksDone && globalActiveFound) {
         // This means the user finished this topic, but is stuck on a later one
-        testStatus = "completed"; 
+        // Wait, if it's not completed in DB, it should be active if we reached here? 
+        // No, if globalActiveFound is true, it means a previous test or current test is active.
+        // Actually, if allTasksDone is true and globalActiveFound is true, but the test isn't completed,
+        // it means THIS test is the active one! (Or a previous one was). 
+        // We should just rely on globalActiveFound.
+        testStatus = "locked"; 
       }
 
       const total = processedSequence.length;

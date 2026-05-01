@@ -5,6 +5,7 @@ import { Topic } from "./topic.model";
 import { generateSlug } from "../../utils/slugify";
 import { Lesson } from "./lesson.model";
 import { Question } from "./question.model";
+import { Progress } from "../study/progress.model";
 
 export const createTopic = async (req: Request, res: Response) => {
   try {
@@ -137,5 +138,43 @@ export const getTopicTest = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error generating topic test:", error);
     return res.status(500).json({ message: "Error generating topic test" });
+  }
+};
+
+export const submitTopicTest = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as Request & { user?: { id: string } };
+    const userId = authReq.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const topicId = String(req.params.topicId);
+    const { passed, score } = req.body;
+
+    if (!req.params.topicId || !Types.ObjectId.isValid(topicId)) {
+      return res.status(400).json({ message: "Invalid topic id" });
+    }
+
+    if (passed) {
+      // Create or update progress for TOPIC_TEST
+      await Progress.findOneAndUpdate(
+        {
+          userId,
+          contentId: topicId,
+          contentType: "TOPIC_TEST"
+        },
+        {
+          $set: {
+            lastReviewed: new Date(),
+          },
+          $max: { bestScore: score || 0 }
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    return res.status(200).json({ success: true, message: "Test result submitted successfully" });
+  } catch (error) {
+    console.error("Error submitting topic test:", error);
+    return res.status(500).json({ message: "Error submitting topic test result" });
   }
 };
