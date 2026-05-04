@@ -319,6 +319,55 @@ export const rejectContent = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const updateContent = async (req: AuthRequest, res: Response) => {
+  try {
+    const typeParam = normalizeType(String(req.params.type || ""));
+    const id = String(req.params.id || "");
+
+    if (!isValidContentType(typeParam)) {
+      return res.status(400).json({ message: "Invalid content type" });
+    }
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid content id" });
+    }
+
+    const modelMap: Record<ContentType, any> = {
+      LESSON: Lesson,
+      DIALOGUE: Dialogue,
+      WRITING: WritingExercise,
+      SPEAKING: SpeakingExercise,
+      QUESTION: Question,
+    };
+
+    const model = modelMap[typeParam];
+    const doc = await model.findById(id);
+
+    if (!doc) {
+      return res.status(404).json({ message: "Content not found" });
+    }
+
+    // Never override MongoDB specific keys manually to avoid VersionErrors
+    const updatedData = { ...req.body };
+    delete updatedData._id;
+    delete updatedData.__v;
+    delete updatedData.createdAt;
+    delete updatedData.updatedAt;
+    
+    // Don't allow modifying status/verification through generic update endpoint
+    delete updatedData.status;
+    delete updatedData.isVerified;
+
+    Object.assign(doc, updatedData);
+    await doc.save();
+
+    return res.json(doc);
+  } catch (error: any) {
+    console.error("Update content error:", error);
+    return res.status(500).json({ message: "Server error", details: error?.message });
+  }
+};
+
 export const generateContent = async (req: AuthRequest, res: Response) => {
   try {
     const { type, topicId, level } = req.body as {
@@ -377,11 +426,37 @@ export const generateContent = async (req: AuthRequest, res: Response) => {
           .lean();
         const nextOrder = (latestLesson?.order ?? 0) + 1;
 
-        created = await Lesson.create({
-          ...generated,
+        const { quiz, ...lessonData } = generated;
+
+        const lessonDoc = await Lesson.create({
+          ...lessonData,
           ...baseFields,
           order: nextOrder,
         });
+
+        let createdResponse: any = lessonDoc.toObject();
+
+        if (Array.isArray(quiz) && quiz.length > 0) {
+          const QUESTION_TYPES = ["MULTIPLE_CHOICE", "MATCHING", "SCRAMBLE", "CLOZE"];
+          const QUESTION_INTENDED_FOR = ["LESSON", "TEST", "BOTH"];
+          
+          const questionDocs = quiz
+            .filter((q) => q && typeof q === "object" && q.content !== undefined)
+            .map((q) => ({
+              lessonId: lessonDoc._id,
+              intendedFor: QUESTION_INTENDED_FOR.includes(q.intendedFor) ? q.intendedFor : "LESSON",
+              type: QUESTION_TYPES.includes(q.type) ? q.type : "MULTIPLE_CHOICE",
+              content: q.content,
+              ...baseFields,
+            }));
+
+          if (questionDocs.length > 0) {
+            const insertedQuestions = await Question.insertMany(questionDocs);
+            createdResponse.quiz = insertedQuestions;
+          }
+        }
+        
+        created = createdResponse;
         break;
       }
       case "DIALOGUE": {

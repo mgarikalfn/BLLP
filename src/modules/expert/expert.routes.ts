@@ -6,6 +6,7 @@ import {
   getPendingContent,
   rejectContent,
   verifyContent,
+  updateContent,
 } from "./expert.controller";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";
 
@@ -145,6 +146,41 @@ router.patch("/content/:type/:id/verify", verifyContent);
  *         description: Content not found
  */
 router.patch("/content/:type/:id/reject", rejectContent);
+
+/**
+ * @openapi
+ * /api/expert/content/{type}/{id}:
+ *   put:
+ *     tags:
+ *       - Expert
+ *     summary: Update draft content
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION]
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Successfully updated content
+ *       404:
+ *         description: Content not found
+ */
+router.put("/content/:type/:id", updateContent);
 
 /**
  * @openapi

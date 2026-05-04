@@ -94,9 +94,28 @@ Return ONLY valid JSON matching this exact structure:
   ],
   "dialogue": [
     { "speaker": "Speaker name", "text": { "am": "...", "ao": "..." } }
+  ],
+  "quiz": [
+    {
+      "type": "MULTIPLE_CHOICE",
+      "intendedFor": "LESSON",
+      "content": {
+        "question": { "am": "...", "ao": "..." },
+        "options": [{ "am": "...", "ao": "..." }],
+        "correctIndex": 0
+      }
+    }
   ]
 }
-Generate 6-8 vocabulary items and 4-6 dialogue lines. All text must be authentic, natural language, not transliteration.`;
+
+Generate 6-8 vocabulary items, 4-6 dialogue lines, and exactly 3 quiz questions of mixed types intended for "LESSON" or "BOTH".
+The "quiz" array MUST contain exactly 3 objects. Each object must use ONE of the following formats:
+1) MULTIPLE_CHOICE: { "type": "MULTIPLE_CHOICE", "intendedFor": "LESSON", "content": { "question": { "am": "...", "ao": "..." }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
+2) MATCHING: { "type": "MATCHING", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "pairs": [{ "left": "...", "right": "..." }] } }
+3) SCRAMBLE: { "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "scrambled": ["...", "...", "..."], "answer": "..." } }
+4) CLOZE: { "type": "CLOZE", "intendedFor": "LESSON", "content": { "sentence": { "am": "_____...", "ao": "_____..." }, "answer": { "am": "...", "ao": "..." } } }
+
+All text must be authentic, natural language, not transliteration.`;
 
     case "DIALOGUE":
       return `You are a bilingual dialogue writer for Amharic and Afan Oromo.
@@ -170,10 +189,10 @@ Type "MATCHING":
 { "type": "MATCHING", "intendedFor": "TEST", "content": { "prompt": { "am": "...", "ao": "..." }, "pairs": [{ "left": "Amharic word", "right": "Oromo translation" }] } }
 
 Type "SCRAMBLE":
-{ "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "scrambleAm": { "words": ["..."], "answer": "..." }, "scrambleOr": { "words": ["..."], "answer": "..." } } }
+{ "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "scrambled": ["...", "...", "..."], "answer": "..." } }
 
 Type "CLOZE":
-{ "type": "CLOZE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "textWithBlank": { "am": "...", "ao": "..." }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
+{ "type": "CLOZE", "intendedFor": "LESSON", "content": { "sentence": { "am": "_____...", "ao": "_____..." }, "answer": { "am": "...", "ao": "..." } } }
 
 Mix the types. Generate exactly 3 questions.`;
 
