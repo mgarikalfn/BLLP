@@ -32,6 +32,31 @@ export interface ChatResult {
   response: string;
 }
 
+export interface VideoCandidate {
+  youtubeId: string;
+  title: string;
+  description: string;
+}
+
+export interface RankedVideoResult {
+  youtubeId: string;
+  relevanceScore: number;
+  reasoning: string;
+}
+
+export interface VideoRankingInput {
+  topicId?: string;
+  learningDirection: string;
+  level: string;
+  candidates: VideoCandidate[];
+}
+
+export interface VideoSearchQueryInput {
+  topicId?: string;
+  learningDirection: string;
+  level: string;
+}
+
 class DictionaryServiceError extends Error {
   statusCode: number;
 
@@ -411,6 +436,68 @@ Strict rule: Do not use English in explanations, tips, or correction logic.`;
     }
 
     throw this.classifyGeminiError(lastError);
+  }
+
+  static async getVideoSearchQuery(input: VideoSearchQueryInput): Promise<string> {
+    const direction = this.normalizeDirection(input.learningDirection);
+    const { nativeLang, targetLang } = this.getLanguagePair(direction);
+    const { topicTitle } = await this.getTopicContext(input.topicId);
+
+    const systemPrompt = `You are an expert language teacher for ${targetLang}. 
+Generate a highly optimized YouTube search query to find listening practice videos for a ${input.level} student.
+Topic: ${topicTitle}
+
+Return ONLY the raw search string, nothing else. Focus on native speakers, comprehensive input, and matching the exact topic.`;
+
+    const model = this.getModel(GEMINI_MODEL);
+    
+    try {
+      const result = await model.generateContent(systemPrompt);
+      return result.response.text().trim();
+    } catch (error: any) {
+      throw this.classifyGeminiError(error);
+    }
+  }
+
+  static async rankVideos(input: VideoRankingInput): Promise<RankedVideoResult[]> {
+    if (!input.candidates || input.candidates.length === 0) {
+      return [];
+    }
+
+    const direction = this.normalizeDirection(input.learningDirection);
+    const { targetLang } = this.getLanguagePair(direction);
+    const { topicTitle } = await this.getTopicContext(input.topicId);
+
+    const systemPrompt = `You are a curriculum curator for ${targetLang} students at the ${input.level} level.
+Evaluate the following YouTube video candidates for the topic: "${topicTitle}".
+Score each video from 0 to 100 based on how well it fits the topic and level.
+
+Candidates:
+${JSON.stringify(input.candidates, null, 2)}
+
+Return a strict JSON array of objects with this exact structure:
+[
+  {
+    "youtubeId": "video id here",
+    "relevanceScore": 85,
+    "reasoning": "Short explanation of why it fits or doesn't fit"
+  }
+]`;
+
+    const model = this.getModel(GEMINI_MODEL, { responseMimeType: "application/json" });
+
+    try {
+      const result = await model.generateContent(systemPrompt);
+      let rawText = result.response.text().trim();
+      
+      // Cleanup in case of markdown fences
+      rawText = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+      
+      const parsed = JSON.parse(rawText) as RankedVideoResult[];
+      return parsed;
+    } catch (error: any) {
+      throw this.classifyGeminiError(error);
+    }
   }
 }
 

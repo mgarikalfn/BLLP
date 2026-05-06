@@ -60,23 +60,7 @@ export const createLesson = async (req: Request, res: Response) => {
           } catch(e) { console.error("Error generating oromo vocab audio"); }
         }
         
-        if (vocab.example) {
-          if (!vocab.example.audioUrl) vocab.example.audioUrl = {};
-          if (vocab.example.am && !vocab.example.audioUrl.am) {
-            try {
-              const exAmUrl = await audioService.generateLessonAudio(vocab.example.am, "amharic");
-              if (exAmUrl) vocab.example.audioUrl.am = exAmUrl;
-              await sleep(2000);
-            } catch(e) { console.error("Error generating amharic example audio"); }
-          }
-          if (vocab.example.ao && !vocab.example.audioUrl.ao) {
-            try {
-              const exAoUrl = await audioService.generateLessonAudio(vocab.example.ao, "oromo");
-              if (exAoUrl) vocab.example.audioUrl.ao = exAoUrl;
-              await sleep(2000);
-            } catch(e) { console.error("Error generating oromo example audio"); }
-          }
-        }
+
       }
     }
 
@@ -283,44 +267,7 @@ export const resumeLessonAudioGeneration = async (req: Request, res: Response) =
           }
         }
 
-        // --- 2. Example Sentence Audio ---
-        if (vocab.example) {
-          if (vocab.example.am && !vocab.example.audioUrl.am) {
-            attemptedCount++;
-            try {
-              console.log(`Generating Amharic example audio for: ${vocab.example.am}`);
-              vocab.example.audioUrl.am = await audioService.generateLessonAudio(vocab.example.am, "amharic");
-              generatedCount++;
-              lesson.markModified(`vocabulary`);
-              await lesson.save();
-              await sleep(3000); // ⏱️ Wait 3 seconds
-            } catch (e: any) {
-              console.error("Failed on example am", e.message);
-              if (e.message?.includes("429") || e.message?.includes("Too Many Requests")) {
-                console.log("⚠️ Hit API rate limit. Automatically sleeping for 35 seconds to cool down...");
-                await sleep(35000);
-              }
-            }
-          }
-          
-          if (vocab.example.ao && !vocab.example.audioUrl.ao) {
-            attemptedCount++;
-            try {
-              console.log(`Generating Oromo example audio for: ${vocab.example.ao}`);
-              vocab.example.audioUrl.ao = await audioService.generateLessonAudio(vocab.example.ao, "oromo");
-              generatedCount++;
-              lesson.markModified(`vocabulary`);
-              await lesson.save();
-              await sleep(3000); // ⏱️ Wait 3 seconds
-            } catch (e: any) {
-              console.error("Failed on example ao", e.message);
-              if (e.message?.includes("429") || e.message?.includes("Too Many Requests")) {
-                console.log("⚠️ Hit API rate limit. Automatically sleeping for 35 seconds to cool down...");
-                await sleep(35000);
-              }
-            }
-          }
-        }
+
       } catch (vocabError: any) {
         console.error(`⚠️ API Error structure for vocab ${i}:`, vocabError.message);
       }
