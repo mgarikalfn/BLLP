@@ -5,6 +5,7 @@ import {
   getAllTopics,
   getTopicTest,
   updateTopic,
+  publishTopic,
 } from "./topic.controller";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";
 // import { getTopicWorkspace } from "../workspace/workspace.controller";
@@ -103,6 +104,7 @@ router.post("/", authenticate, checkRole(["EXPERT", "ADMIN"]), createTopic);
  *         description: Success
  */
 router.put("/:id", authenticate, checkRole(["EXPERT", "ADMIN"]), updateTopic);
+router.patch("/:id/publish", authenticate, checkRole(["EXPERT", "ADMIN"]), publishTopic);
 // 
 
 /**

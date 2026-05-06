@@ -9,7 +9,7 @@ import { Progress } from "../study/progress.model";
 
 export const createTopic = async (req: Request, res: Response) => {
   try {
-    const { title, description, level, thumbnailUrl } = req.body;
+    const { title, description, level, thumbnailUrl, unitNumber, section, tips } = req.body;
 
     // 1. Validate Input
     if (!title?.am || !title?.ao || !description?.am || !description?.ao || !level) {
@@ -32,12 +32,19 @@ export const createTopic = async (req: Request, res: Response) => {
     // 4. Create Topic
   
 
+const normalizedUnitNumber = Number.isFinite(Number(unitNumber)) ? Number(unitNumber) : 0;
+const normalizedSection = typeof section === "string" && section.trim().length > 0 ? section : "A1";
+
 const topicPayload = {
   title: title,
   description: description,
   level: level,
   slug: slug, // Use explicit key:value
-  thumbnailUrl: thumbnailUrl
+  thumbnailUrl: thumbnailUrl,
+  unitNumber: normalizedUnitNumber,
+  section: normalizedSection,
+  tips: tips,
+  isPublished: false
 };
 
 //console.log("FINAL PAYLOAD BEFORE DB:", JSON.stringify(topicPayload, null, 2));
@@ -56,7 +63,7 @@ const topic = await Topic.create(topicPayload);
 
 export const getAllTopics = async (_req: Request, res: Response) => {
   try {
-    const topics = await Topic.find().sort({ createdAt: -1 });
+    const topics = await Topic.find().sort({ section: 1, unitNumber: 1 });
     res.json(topics);
   } catch {
     res.status(500).json({ message: "Server error" });
@@ -66,7 +73,7 @@ export const getAllTopics = async (_req: Request, res: Response) => {
 export const updateTopic = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, description, level, thumbnailUrl } = req.body;
+    const { title, description, level, thumbnailUrl, unitNumber, section, tips, isPublished } = req.body;
 
     const topic = await Topic.findById(id);
     if (!topic) return res.status(404).json({ message: "Topic not found" });
@@ -79,12 +86,37 @@ export const updateTopic = async (req: Request, res: Response) => {
     if (description) topic.description = description;
     if (level) topic.level = level;
     if (thumbnailUrl !== undefined) topic.thumbnailUrl = thumbnailUrl;
+    if (unitNumber !== undefined) {
+      const normalizedUnitNumber = Number(unitNumber);
+      if (!Number.isNaN(normalizedUnitNumber)) {
+        topic.unitNumber = normalizedUnitNumber;
+      }
+    }
+    if (section) topic.section = section;
+    if (tips !== undefined) topic.tips = tips;
+    if (typeof isPublished === "boolean") topic.isPublished = isPublished;
 
     await topic.save();
 
     res.json(topic);
   } catch {
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const publishTopic = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const topic = await Topic.findById(id);
+    if (!topic) return res.status(404).json({ message: "Topic not found" });
+
+    topic.isPublished = true;
+    await topic.save();
+
+    return res.json(topic);
+  } catch {
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

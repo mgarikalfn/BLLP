@@ -257,14 +257,14 @@ export const discoverVideosWithAI = async (req: Request, res: Response) => {
           title: candidate.title,
           description: candidate.description || "",
           thumbnailUrl: candidate.thumbnailUrl || "",
-          topicId,
+          topicId: new mongoose.Types.ObjectId(topicId),
           level: level as VideoLevel,
           tags: [topicTitle, resolvedTargetLanguage, level],
           relevanceScore,
           isVerified: false,
           status: YoutubeVideoStatus.NEEDS_REVIEW,
           generatedByAI: true,
-          authorId: authReq.user?.id,
+          authorId: authReq.user?.id ? new mongoose.Types.ObjectId(authReq.user.id) : undefined,
         };
       })
       .filter(Boolean) as Array<
@@ -273,14 +273,14 @@ export const discoverVideosWithAI = async (req: Request, res: Response) => {
         title: string;
         description: string;
         thumbnailUrl: string;
-        topicId: string;
+        topicId: mongoose.Types.ObjectId;
         level: VideoLevel;
         tags: string[];
         relevanceScore: number;
         isVerified: boolean;
         status: YoutubeVideoStatus;
         generatedByAI: boolean;
-        authorId?: string;
+        authorId?: mongoose.Types.ObjectId;
       }
     >;
 

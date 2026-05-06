@@ -108,8 +108,11 @@ Return ONLY valid JSON matching this exact structure:
   ]
 }
 
-Generate 6-8 vocabulary items, 4-6 dialogue lines, and exactly 3 quiz questions of mixed types intended for "LESSON" or "BOTH".
-The "quiz" array MUST contain exactly 3 objects. Each object must use ONE of the following formats:
+Generate exactly 3-5 vocabulary items, exactly 2-3 dialogue lines (to use as grammar examples showing the vocabulary in context), and exactly 2 quiz questions.
+The dialogue lines are NOT a conversation feature - they are grammar illustration only.
+Keep each vocabulary item's example sentence to 1 sentence max (under 10 words).
+Both quiz questions must directly test a specific word from THIS lesson's vocabulary.
+The "quiz" array MUST contain exactly 2 objects. Each object must use ONE of the following formats:
 1) MULTIPLE_CHOICE: { "type": "MULTIPLE_CHOICE", "intendedFor": "LESSON", "content": { "question": { "am": "...", "ao": "..." }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
 2) MATCHING: { "type": "MATCHING", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "pairs": [{ "left": "...", "right": "..." }] } }
 3) SCRAMBLE: { "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "scrambled": ["...", "...", "..."], "answer": "..." } }
