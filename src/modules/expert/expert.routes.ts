@@ -44,7 +44,7 @@ router.get("/dashboard/stats", getDashboardStats);
  *         required: false
  *         schema:
  *           type: string
- *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION]
+ *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION, TOPIC]
  *       - in: query
  *         name: topicId
  *         required: false
@@ -71,7 +71,7 @@ router.get("/content/pending", getPendingContent);
  *         required: false
  *         schema:
  *           type: string
- *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION]
+ *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION, TOPIC]
  *       - in: query
  *         name: topicId
  *         required: false
@@ -104,7 +104,7 @@ router.get("/content/all", getAllContent);
  *         required: true
  *         schema:
  *           type: string
- *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION]
+ *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION, TOPIC]
  *       - in: path
  *         name: id
  *         required: true
@@ -133,7 +133,7 @@ router.patch("/content/:type/:id/verify", verifyContent);
  *         required: true
  *         schema:
  *           type: string
- *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION]
+ *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION, TOPIC]
  *       - in: path
  *         name: id
  *         required: true
@@ -162,7 +162,7 @@ router.patch("/content/:type/:id/reject", rejectContent);
  *         required: true
  *         schema:
  *           type: string
- *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION]
+ *           enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION, TOPIC]
  *       - in: path
  *         name: id
  *         required: true
@@ -201,7 +201,7 @@ router.put("/content/:type/:id", updateContent);
  *             properties:
  *               type:
  *                 type: string
- *                 enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION]
+ *                 enum: [LESSON, DIALOGUE, WRITING, SPEAKING, QUESTION, TOPIC]
  *               topicId:
  *                 type: string
  *               level:

@@ -7,9 +7,10 @@ import { Dialogue } from "../dialogue/dialogue.model";
 import { SpeakingExercise } from "../speaking/speakingExercise.model";
 import { WritingExercise } from "../writtingExercise/writingExercise.model";
 import { AuthRequest } from "../../middleware/auth.middleware";
-import { ExpertContentGenerator, ExpertGeneratorError } from "./expert.generator";
+import { generateSlug } from "../../utils/slugify";
+import { ExpertContentGenerator, ExpertGeneratorError, buildPrompt } from "./expert.generator";
 
-const CONTENT_TYPES = ["LESSON", "DIALOGUE", "WRITING", "SPEAKING", "QUESTION"] as const;
+const CONTENT_TYPES = ["LESSON", "DIALOGUE", "WRITING", "SPEAKING", "QUESTION", "TOPIC"] as const;
 const STATUS_VALUES = ["DRAFT", "NEEDS_REVIEW", "PUBLISHED"] as const;
 
 type ContentType = (typeof CONTENT_TYPES)[number];
@@ -36,6 +37,36 @@ const isValidContentType = (value?: string): value is ContentType =>
 const isValidStatus = (value?: string): value is StatusType =>
   !!value && STATUS_VALUES.includes(value as StatusType);
 
+const normalizeTopicFilter = (filter: FetchFilter) => {
+  const topicFilter: FetchFilter = { ...filter };
+
+  if (typeof topicFilter.topicId === "string") {
+    topicFilter._id = topicFilter.topicId;
+    delete topicFilter.topicId;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(topicFilter, "status")) {
+    const statusValue = String(topicFilter.status || "").toUpperCase();
+    delete topicFilter.status;
+    if (statusValue === "PUBLISHED") {
+      topicFilter.isPublished = true;
+    }
+    if (statusValue === "DRAFT" || statusValue === "NEEDS_REVIEW") {
+      topicFilter.isPublished = false;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(topicFilter, "isVerified")) {
+    const isVerified = topicFilter.isVerified;
+    delete topicFilter.isVerified;
+    if (typeof isVerified === "boolean") {
+      topicFilter.isPublished = isVerified;
+    }
+  }
+
+  return topicFilter;
+};
+
 const addMeta = (items: any[], contentType: ContentType, titleBuilder: TitleBuilder) =>
   items.map((item) => ({
     ...item,
@@ -60,6 +91,7 @@ const titleBuilders: Record<ContentType, TitleBuilder> = {
   WRITING: (item) => item?.prompt?.am || "Writing Exercise",
   SPEAKING: (item) => item?.prompt?.am || "Speaking Exercise",
   QUESTION: questionTitleBuilder,
+  TOPIC: (item) => item?.title?.am || "Topic",
 };
 
 const fetchContent = async (type: ContentType, filter: FetchFilter) => {
@@ -82,6 +114,11 @@ const fetchContent = async (type: ContentType, filter: FetchFilter) => {
     }
     case "QUESTION": {
       const items = await Question.find(filter).lean();
+      return addMeta(items, type, titleBuilders[type]);
+    }
+    case "TOPIC": {
+      const topicFilter = normalizeTopicFilter(filter);
+      const items = await Topic.find(topicFilter).lean();
       return addMeta(items, type, titleBuilders[type]);
     }
     default:
@@ -260,6 +297,7 @@ export const verifyContent = async (req: AuthRequest, res: Response) => {
       WRITING: WritingExercise,
       SPEAKING: SpeakingExercise,
       QUESTION: Question,
+      TOPIC: Topic,
     };
 
     const model = modelMap[typeParam];
@@ -269,8 +307,12 @@ export const verifyContent = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: "Content not found" });
     }
 
-    doc.isVerified = true;
-    doc.status = "PUBLISHED";
+    if (typeParam === "TOPIC") {
+      doc.isPublished = true;
+    } else {
+      doc.isVerified = true;
+      doc.status = "PUBLISHED";
+    }
     await doc.save();
 
     return res.json(doc);
@@ -299,6 +341,7 @@ export const rejectContent = async (req: AuthRequest, res: Response) => {
       WRITING: WritingExercise,
       SPEAKING: SpeakingExercise,
       QUESTION: Question,
+      TOPIC: Topic,
     };
 
     const model = modelMap[typeParam];
@@ -308,8 +351,12 @@ export const rejectContent = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: "Content not found" });
     }
 
-    doc.isVerified = false;
-    doc.status = "DRAFT";
+    if (typeParam === "TOPIC") {
+      doc.isPublished = false;
+    } else {
+      doc.isVerified = false;
+      doc.status = "DRAFT";
+    }
     await doc.save();
 
     return res.json(doc);
@@ -338,6 +385,7 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
       WRITING: WritingExercise,
       SPEAKING: SpeakingExercise,
       QUESTION: Question,
+      TOPIC: Topic,
     };
 
     const model = modelMap[typeParam];
@@ -386,12 +434,50 @@ export const generateContent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "Invalid content type" });
     }
 
-    if (!isValidObjectId(topicId)) {
-      return res.status(400).json({ message: "Invalid topicId" });
-    }
-
     if (!req.user?.id) {
       return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (normalizedType === "TOPIC") {
+      const { theme, section, level: levelOverride } = req.body as {
+        theme?: string;
+        section?: string;
+        level?: string;
+      };
+
+      if (!theme || typeof theme !== "string" || theme.trim().length < 2) {
+        return res.status(400).json({
+          message: "theme is required (e.g. 'Greetings', 'Food')",
+        });
+      }
+
+      const resolvedSection = section?.toUpperCase() || "A1";
+      const resolvedLevel = levelOverride?.trim() || "BEGINNER";
+      const trimmedTheme = theme.trim();
+
+      const fakeTopic = { title: { am: trimmedTheme, ao: trimmedTheme } };
+      const prompt = buildPrompt("TOPIC", fakeTopic, resolvedSection);
+      const generated = await ExpertContentGenerator.generateFromPrompt(prompt);
+
+      const slugBase = generated?.title?.ao || generated?.title?.am || trimmedTheme;
+      const slug = generateSlug(slugBase);
+
+      const topic = await Topic.create({
+        ...generated,
+        slug,
+        level: resolvedLevel,
+        section: resolvedSection,
+        unitNumber: 0,
+        isPublished: false,
+        generatedByAI: true,
+        authorId: req.user.id,
+      });
+
+      return res.status(201).json(topic);
+    }
+
+    if (!isValidObjectId(topicId)) {
+      return res.status(400).json({ message: "Invalid topicId" });
     }
 
     const topic = await Topic.findById(topicId).select("level").lean();

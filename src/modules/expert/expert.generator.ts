@@ -73,7 +73,7 @@ const parseJsonResponse = (text: string) => {
   }
 };
 
-const buildPrompt = (type: string, topic: { title: { am: string; ao: string } }, level: string) => {
+export const buildPrompt = (type: string, topic: { title: { am: string; ao: string } }, level: string) => {
   const topicTitle = `${topic.title.am} / ${topic.title.ao}`;
 
   switch (type) {
@@ -108,10 +108,7 @@ Return ONLY valid JSON matching this exact structure:
   ]
 }
 
-Generate exactly 3-5 vocabulary items, exactly 2-3 dialogue lines (to use as grammar examples showing the vocabulary in context), and exactly 2 quiz questions.
-The dialogue lines are NOT a conversation feature - they are grammar illustration only.
-Keep each vocabulary item's example sentence to 1 sentence max (under 10 words).
-Both quiz questions must directly test a specific word from THIS lesson's vocabulary.
+Generate exactly 3-5 vocabulary items, exactly 2-3 dialogue lines (grammar illustrations only, NOT a conversation feature - they demonstrate the vocabulary in context), and exactly 2 quiz questions. Keep each vocabulary example sentence under 10 words. Both quiz questions must test a specific word from this lesson's vocabulary. The quiz array must contain exactly 2 objects.
 The "quiz" array MUST contain exactly 2 objects. Each object must use ONE of the following formats:
 1) MULTIPLE_CHOICE: { "type": "MULTIPLE_CHOICE", "intendedFor": "LESSON", "content": { "question": { "am": "...", "ao": "..." }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
 2) MATCHING: { "type": "MATCHING", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "pairs": [{ "left": "...", "right": "..." }] } }
@@ -199,22 +196,38 @@ Type "CLOZE":
 
 Mix the types. Generate exactly 3 questions.`;
 
+    case "TOPIC":
+      return `You are a bilingual curriculum designer for Amharic and Afan Oromo.
+Generate a learning topic for the theme "${topicTitle}" at ${level} level (CEFR section: ${level}).
+
+Return ONLY valid JSON matching this exact structure:
+{
+  "title": {
+    "am": "Topic title in Amharic (short, 2-4 words)",
+    "ao": "Topic title in Afan Oromo (short, 2-4 words)"
+  },
+  "description": {
+    "am": "1-2 sentence description of what learners will learn, written in Amharic",
+    "ao": "1-2 sentence description of what learners will learn, written in Afan Oromo"
+  },
+  "tips": {
+    "am": "A brief grammar or vocabulary tip in Amharic. Explain a key pattern, rule, or cultural note relevant to this topic. Use simple language. 2-4 sentences max. Include 1-2 short example sentences to illustrate.",
+    "ao": "The same tip written in Afan Oromo. 2-4 sentences max. Include the same examples."
+  }
+}
+
+The tips field is equivalent to Duolingo's 'Tips' feature - it appears as a lightbulb icon
+on the topic card and opens a modal before learners start their first lesson.
+Write tips as if explaining to a complete beginner. Use encouraging, clear language.
+All text must be authentic natural language, not transliteration.`;
+
     default:
       throw new ExpertGeneratorError("Unsupported content type", 400);
   }
 };
 
 export class ExpertContentGenerator {
-  static async generate(type: string, topicId: string, level: string): Promise<any> {
-    const topic = await Topic.findById(topicId).select("title").lean();
-
-    if (!topic) {
-      throw new ExpertGeneratorError("Topic not found", 404);
-    }
-
-    const normalizedType = type.toUpperCase();
-    const prompt = buildPrompt(normalizedType, topic, level);
-
+  static async generateFromPrompt(prompt: string): Promise<any> {
     const modelsToTry = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL].filter(
       (model, index, list) => !!model && list.indexOf(model) === index,
     );
@@ -245,5 +258,17 @@ export class ExpertContentGenerator {
 
     const details = lastError?.message ? String(lastError.message) : "Gemini request failed";
     throw new ExpertGeneratorError("Gemini generation failed", 502, details);
+  }
+
+  static async generate(type: string, topicId: string, level: string): Promise<any> {
+    const topic = await Topic.findById(topicId).select("title").lean();
+
+    if (!topic) {
+      throw new ExpertGeneratorError("Topic not found", 404);
+    }
+
+    const normalizedType = type.toUpperCase();
+    const prompt = buildPrompt(normalizedType, topic, level);
+    return this.generateFromPrompt(prompt);
   }
 }

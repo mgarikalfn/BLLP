@@ -1,8 +1,13 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 
 export interface ILocalizedText {
   am: string;
   ao: string;
+}
+
+export interface IOptionalLocalizedText {
+  am?: string;
+  ao?: string;
 }
 
 export interface ITopic extends Document {
@@ -11,10 +16,12 @@ export interface ITopic extends Document {
   level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
   slug: string;
   thumbnailUrl?: string;
-  unitNumber: number;
-  section: "INTRO" | "A1" | "A2" | "B1" | "B2";
-  tips?: ILocalizedText;
-  isPublished: boolean;
+  unitNumber?: number;
+  section?: "INTRO" | "A1" | "A2" | "B1" | "B2";
+  tips?: IOptionalLocalizedText;
+  isPublished?: boolean;
+  generatedByAI?: boolean;
+  authorId?: Types.ObjectId;
 }
 
 const localizedSchema = new Schema<ILocalizedText>(
@@ -25,7 +32,7 @@ const localizedSchema = new Schema<ILocalizedText>(
   { _id: false }
 );
 
-const tipsSchema = new Schema<ILocalizedText>(
+const tipsSchema = new Schema<IOptionalLocalizedText>(
   {
     am: { type: String },
     ao: { type: String }
@@ -51,7 +58,9 @@ const topicSchema = new Schema<ITopic>(
       default: "A1"
     },
     tips: { type: tipsSchema },
-    isPublished: { type: Boolean, default: true }
+    isPublished: { type: Boolean, default: true },
+    generatedByAI: { type: Boolean, default: false },
+    authorId: { type: Schema.Types.ObjectId, ref: "User" }
   },
   { timestamps: true }
 );
