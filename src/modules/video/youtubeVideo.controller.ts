@@ -3,7 +3,6 @@ import axios from "axios";
 import mongoose from "mongoose";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import { Topic } from "../content/topic.model";
-import { User } from "../user/user.model";
 import {
   AIService,
   AIServiceError,
@@ -69,13 +68,9 @@ const resolveTargetLanguage = async (
   const fromRequest = normalizeTargetLanguage(provided);
   if (fromRequest) return fromRequest;
 
-  const userId = req.user?.id;
-  if (!userId) return "Amharic and Afan Oromo";
-
-  const user = await User.findById(userId).select("targetLanguage").lean();
-  const userLang = normalizeTargetLanguage(String(user?.targetLanguage || ""));
-
-  return userLang || "Amharic and Afan Oromo";
+  // For experts discovering content, default to searching for both languages
+  // instead of tying it to their personal learner profile.
+  return "Amharic and Afan Oromo";
 };
 
 const mapYouTubeItems = (items: YouTubeSearchItem[]): VideoCandidate[] => {
@@ -212,33 +207,47 @@ export const discoverVideosWithAI = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Topic not found" });
     }
 
-    const resolvedTargetLanguage = await resolveTargetLanguage(authReq, targetLanguage);
     const topicTitle = `${topic.title.am} / ${topic.title.ao}`;
 
-    const searchQuery = await AIService.generateVideoSearchQuery(
-      topicTitle,
-      resolvedTargetLanguage,
-      level,
-    );
+    // Run two AI query generations in parallel — one per language
+    const [amharicQuery, oromoQuery] = await Promise.all([
+      AIService.generateSearchQueryForLanguage(topicTitle, "Amharic", level),
+      AIService.generateSearchQueryForLanguage(topicTitle, "Afan Oromo", level),
+    ]);
 
-    const youtubeItems = await fetchYouTubeVideos(
-      searchQuery,
-      topicTitle,
-      resolvedTargetLanguage,
-      level,
-    );
+    // Fetch YouTube results for both languages in parallel
+    const [amharicItems, oromoItems] = await Promise.all([
+      fetchYouTubeVideos(amharicQuery, topicTitle, "Amharic", level),
+      fetchYouTubeVideos(oromoQuery, topicTitle, "Afan Oromo", level),
+    ]);
 
-    const candidates = mapYouTubeItems(youtubeItems);
+    // Tag items with their source language, then merge and deduplicate by youtubeId
+    const taggedAmharic = amharicItems.map((item) => ({ ...item, _sourceLang: "Amharic" }));
+    const taggedOromo   = oromoItems.map((item) => ({ ...item, _sourceLang: "Afan Oromo" }));
+    const seenIds = new Set<string>();
+    const allItems = [...taggedAmharic, ...taggedOromo].filter((item) => {
+      const id = item.id?.videoId;
+      if (!id || seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
+
+    const candidates = mapYouTubeItems(allItems);
+    // Carry the source language through for tagging later
+    const sourceLangById = new Map(
+      allItems.map((item) => [item.id?.videoId ?? "", item._sourceLang])
+    );
+    const targetLanguageContext = "Amharic and Afan Oromo";
 
     if (candidates.length === 0) {
       return res.status(200).json({
-        query: searchQuery,
+        query: { amharic: amharicQuery, oromo: oromoQuery },
         count: 0,
         videos: [],
       });
     }
 
-    const topicContext = `${topicTitle} | ${resolvedTargetLanguage} | ${level}`;
+    const topicContext = `${topicTitle} | ${targetLanguageContext} | ${level}`;
     const ranked = await AIService.rankVideoCandidates(candidates, topicContext);
 
     const rankedById = new Map(
@@ -259,7 +268,7 @@ export const discoverVideosWithAI = async (req: Request, res: Response) => {
           thumbnailUrl: candidate.thumbnailUrl || "",
           topicId: new mongoose.Types.ObjectId(topicId),
           level: level as VideoLevel,
-          tags: [topicTitle, resolvedTargetLanguage, level],
+          tags: [topicTitle, sourceLangById.get(candidate.youtubeId) ?? "Amharic and Afan Oromo", level],
           relevanceScore,
           isVerified: false,
           status: YoutubeVideoStatus.NEEDS_REVIEW,
@@ -286,7 +295,7 @@ export const discoverVideosWithAI = async (req: Request, res: Response) => {
 
     if (docs.length === 0) {
       return res.status(200).json({
-        query: searchQuery,
+        query: { amharic: amharicQuery, oromo: oromoQuery },
         count: 0,
         videos: [],
       });
@@ -307,10 +316,11 @@ export const discoverVideosWithAI = async (req: Request, res: Response) => {
     }).sort({ relevanceScore: -1 });
 
     return res.status(200).json({
-      query: searchQuery,
+      query: { amharic: amharicQuery, oromo: oromoQuery },
       count: savedVideos.length,
       videos: savedVideos,
     });
+
   } catch (error: any) {
     if (error instanceof AIServiceError) {
       return res.status(error.statusCode).json({

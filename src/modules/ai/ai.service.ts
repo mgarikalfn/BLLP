@@ -459,6 +459,32 @@ Return ONLY the raw search string, nothing else. Focus on native speakers, compr
     }
   }
 
+  /**
+   * Generate a YouTube search query optimized for a single specific language.
+   * Used to run two parallel searches (one Amharic, one Afan Oromo) and merge results.
+   */
+  static async generateSearchQueryForLanguage(
+    topicTitle: string,
+    language: string,
+    level: string,
+  ): Promise<string> {
+    const systemPrompt = `You are an expert ${language} language teacher.
+Generate a highly optimized YouTube search query to find listening practice videos for a ${level} student.
+Topic: ${topicTitle}
+Target language for the video content: ${language}
+
+The search query should help find YouTube videos where the MAIN spoken or written language is ${language}.
+Return ONLY the raw search string. No quotes, no explanation. Max 10 words.`;
+
+    const model = this.getModel(GEMINI_MODEL);
+    try {
+      const result = await model.generateContent(systemPrompt);
+      return result.response.text().trim();
+    } catch (error: any) {
+      throw this.classifyGeminiError(error);
+    }
+  }
+
   static async rankVideos(input: VideoRankingInput): Promise<RankedVideoResult[]> {
     if (!input.candidates || input.candidates.length === 0) {
       return [];

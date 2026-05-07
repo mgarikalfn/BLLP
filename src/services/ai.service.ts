@@ -204,6 +204,84 @@ Return only the search query. Do not add quotes, punctuation, or extra commentar
     throw this.classifyGeminiError(lastError);
   }
 
+  static async generateSearchQueryForLanguage(
+    topicTitle: string,
+    language: string,
+    level: string,
+  ): Promise<string> {
+    const title = (topicTitle || "").trim();
+    const lang = (language || "").trim();
+    const difficulty = (level || "").trim();
+
+    if (!title) {
+      throw new AIServiceError("topicTitle is required", 400);
+    }
+
+    if (!lang) {
+      throw new AIServiceError("language is required", 400);
+    }
+
+    if (!difficulty) {
+      throw new AIServiceError("level is required", 400);
+    }
+
+    const prompt = `You are an expert ${lang} language teacher.
+Generate a highly optimized YouTube search query to find listening practice videos for a ${difficulty} student.
+Topic: ${title}
+Target language for the video content: ${lang}
+
+The search query should help find YouTube videos where the MAIN spoken or written language is ${lang}.
+Return ONLY the raw search string. No quotes, no explanation. Max 10 words.`;
+
+    const modelsToTry = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL].filter(
+      (model, index, list) => !!model && list.indexOf(model) === index,
+    );
+
+    let lastError: any = null;
+
+    for (const modelName of modelsToTry) {
+      const model = this.getModel(modelName, "text/plain");
+
+      for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+          const result = await model.generateContent(prompt);
+          const raw = result.response.text();
+          const query = raw
+            .replace(/^['"`]+/, "")
+            .replace(/['"`]+$/, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          if (!query) {
+            throw new AIServiceError("Empty AI response", 502);
+          }
+
+          return query;
+        } catch (error: any) {
+          if (error instanceof AIServiceError) {
+            throw error;
+          }
+
+          lastError = error;
+
+          const canRetry = this.isTransientGeminiError(error) && attempt < RETRY_DELAYS_MS.length;
+          if (canRetry) {
+            await this.sleep(RETRY_DELAYS_MS[attempt]);
+            continue;
+          }
+
+          if (!this.isTransientGeminiError(error)) {
+            throw this.classifyGeminiError(error);
+          }
+
+          break;
+        }
+      }
+    }
+
+    throw this.classifyGeminiError(lastError);
+  }
+
   static async rankVideoCandidates(
     videoList: VideoCandidate[],
     topicContext: string,

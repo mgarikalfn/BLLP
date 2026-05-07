@@ -22,10 +22,11 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
 
     const filter: any = {};
     if (level) filter.level = level;
+    filter.isPublished = true;
 
     // 2. Fetch Topics
     const topics = await Topic.find(filter)
-      .sort({ order: 1, createdAt: 1 })
+      .sort({ section: 1, unitNumber: 1, createdAt: 1 })
       .skip(skip)
       .limit(limit)
       .lean();
@@ -139,6 +140,9 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
         _id: topic._id,
         title: topic.title,
         level: topic.level,
+        section: topic.section || "A1",
+        unitNumber: typeof topic.unitNumber === "number" ? topic.unitNumber : 0,
+        tips: topic.tips || null,
         pathNodes: processedSequence, // Frontend can now map this single array
         topicTest: {
           title: "Unit Review",
