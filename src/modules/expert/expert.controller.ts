@@ -416,8 +416,18 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
   }
 };
 
+import { SystemConfig } from "../admin/systemConfig.model";
+
 export const generateContent = async (req: AuthRequest, res: Response) => {
   try {
+    // 1. Check Global System Config to see if AI Generation is allowed
+    const config = await SystemConfig.getSingleton();
+    if (!config.isAIGenerationEnabled) {
+      return res.status(403).json({ 
+        message: "AI Content Generation is currently disabled by the Platform Admin." 
+      });
+    }
+
     const { type, topicId, level, lessonId } = req.body as {
       type?: string;
       topicId?: string;

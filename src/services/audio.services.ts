@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Storage, Bucket } from "@google-cloud/storage";
 import path from "path";
+import fs from "fs";
 
 export class GeminiAudioService {
   private genAI: GoogleGenerativeAI;
@@ -23,11 +24,13 @@ export class GeminiAudioService {
       throw new Error("[GeminiAudioService] Missing GCS_BUCKET_NAME in environment variables.");
     }
 
-    // Storage automatically uses GOOGLE_APPLICATION_CREDENTIALS from .env
-    this.storage = new Storage({
-      // Explicitly set the key file path just in case the env var isn't picked up correctly
-      keyFilename: path.join(process.cwd(), "gcp-service-account.json")
-    });
+    // Storage automatically uses GOOGLE_APPLICATION_CREDENTIALS if present.
+    // On Cloud Run, it uses the service's identity automatically.
+    const keyPath = path.join(process.cwd(), "gcp-service-account.json");
+    this.storage = fs.existsSync(keyPath) 
+      ? new Storage({ keyFilename: keyPath })
+      : new Storage();
+      
     this.bucket = this.storage.bucket(bucketName);
   }
 

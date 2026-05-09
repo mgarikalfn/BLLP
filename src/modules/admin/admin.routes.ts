@@ -6,6 +6,8 @@ import {
   toggleUserStatus,
   getContentStats,
   getAnalytics,
+  getSystemConfig,
+  updateSystemConfig,
 } from "./admin.controller";
 
 const router = Router();
@@ -226,5 +228,54 @@ router.get("/content-stats", getContentStats);
  *         description: Error fetching analytics
  */
 router.get("/analytics", getAnalytics);
+
+/**
+ * @openapi
+ * /api/admin/config:
+ *   get:
+ *     tags:
+ *       - Admin
+ *     summary: Get the single system configuration
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ *       500:
+ *         description: Error fetching system config
+ */
+router.get("/config", getSystemConfig);
+
+/**
+ * @openapi
+ * /api/admin/config:
+ *   put:
+ *     tags:
+ *       - Admin
+ *     summary: Update system configuration fields
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               isAIGenerationEnabled:
+ *                 type: boolean
+ *               activeSeasonId:
+ *                 type: string
+ *               maintenanceMode:
+ *                 type: boolean
+ *               dailyXpCap:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Configuration updated successfully
+ *       500:
+ *         description: Error updating system config
+ */
+router.put("/config", updateSystemConfig);
 
 export default router;

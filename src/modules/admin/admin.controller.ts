@@ -6,6 +6,7 @@ import { Lesson } from "../content/lesson.model";
 import { Question } from "../content/question.model";
 import { StudyStats } from "../study/study.statts.models";
 import { Progress } from "../study/progress.model";
+import { SystemConfig } from "./systemConfig.model";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -235,5 +236,47 @@ export const getAnalytics = async (req: AuthRequest, res: Response): Promise<voi
     });
   } catch (error: any) {
     res.status(500).json({ message: "Error fetching analytics", error: error.message });
+  }
+};
+
+/**
+ * GET /api/admin/config
+ * Fetch the single system configuration document.
+ * If it doesn't exist, it will be automatically created.
+ */
+export const getSystemConfig = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const config = await SystemConfig.getSingleton();
+    res.status(200).json({ data: config });
+  } catch (error: any) {
+    res.status(500).json({ message: "Error fetching system config", error: error.message });
+  }
+};
+
+/**
+ * PUT /api/admin/config
+ * Update the system configuration document.
+ */
+export const updateSystemConfig = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { isAIGenerationEnabled, activeSeasonId, maintenanceMode, dailyXpCap } = req.body;
+    
+    // Get or create the singleton
+    const config = await SystemConfig.getSingleton();
+
+    // Update only the provided fields
+    if (isAIGenerationEnabled !== undefined) config.isAIGenerationEnabled = isAIGenerationEnabled;
+    if (activeSeasonId !== undefined) config.activeSeasonId = activeSeasonId;
+    if (maintenanceMode !== undefined) config.maintenanceMode = maintenanceMode;
+    if (dailyXpCap !== undefined) config.dailyXpCap = dailyXpCap;
+
+    await config.save();
+    
+    res.status(200).json({ 
+      message: "Configuration updated successfully", 
+      data: config 
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: "Error updating system config", error: error.message });
   }
 };

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Lesson } from "./lesson.model";
 import { Question } from "./question.model";
 import { GeminiAudioService } from "../../services/audio.services";
+import { SystemConfig } from "../admin/systemConfig.model";
 
 // Helper to pause execution
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -243,6 +244,14 @@ export const updateLesson = async (req: Request, res: Response) => {
 
 export const resumeLessonAudioGeneration = async (req: Request, res: Response) => {
   try {
+    // Check Global System Config
+    const config = await SystemConfig.getSingleton();
+    if (!config.isAIGenerationEnabled) {
+      return res.status(403).json({ 
+        message: "AI Audio Generation is currently disabled by the Platform Admin." 
+      });
+    }
+
     const { id } = req.params;
 
     const lesson = await Lesson.findById(id);
