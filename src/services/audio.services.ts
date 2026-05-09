@@ -8,8 +8,10 @@ export class GeminiAudioService {
   private uploadDir: string;
 
   constructor() {
-    const apiKey =  "AIzaSyCU8UBfM-YqqywQS8tHjWogFDDpd1HbK9Q" 
-    //"AIzaSyDYW9kxlAT-STi1duR6cU_TLsJI4S8rDDg";
+    const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+    if (!apiKey) {
+      throw new Error("[GeminiAudioService] Missing GEMINI_API_KEY in environment variables.");
+    }
     this.genAI = new GoogleGenerativeAI(apiKey);
     
     this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });

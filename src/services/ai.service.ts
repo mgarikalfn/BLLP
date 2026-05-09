@@ -25,7 +25,7 @@ export class AIServiceError extends Error {
 }
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-1.5-flash";
+const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-flash";
 const RETRY_DELAYS_MS = [250, 700];
 
 type GeminiResponseMimeType = "application/json" | "text/plain";

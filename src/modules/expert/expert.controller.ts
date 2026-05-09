@@ -418,10 +418,11 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
 
 export const generateContent = async (req: AuthRequest, res: Response) => {
   try {
-    const { type, topicId, level } = req.body as {
+    const { type, topicId, level, lessonId } = req.body as {
       type?: string;
       topicId?: string;
       level?: string;
+      lessonId?: string;
     };
 
     const normalizedType = normalizeType(type);
@@ -577,6 +578,7 @@ export const generateContent = async (req: AuthRequest, res: Response) => {
         const docs = generated.map((item: any) => ({
           ...item,
           ...baseFields,
+          ...(isValidObjectId(lessonId) ? { lessonId } : {}),
         }));
 
         created = await Question.insertMany(docs);

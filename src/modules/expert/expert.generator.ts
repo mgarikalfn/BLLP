@@ -1,8 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Topic } from "../content/topic.model";
+import { Lesson } from "../content/lesson.model";
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-1.5-flash";
+const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-flash";
 const RETRY_DELAYS_MS = [250, 700];
 
 export class ExpertGeneratorError extends Error {
@@ -32,7 +33,7 @@ const getModel = (modelName: string) => {
     model: modelName,
     generationConfig: {
       responseMimeType: "application/json",
-      temperature: 0.4,
+      temperature: 0.7, // Increased from 0.4 for more creative and varied outputs
     },
   });
 };
@@ -73,13 +74,18 @@ const parseJsonResponse = (text: string) => {
   }
 };
 
-export const buildPrompt = (type: string, topic: { title: { am: string; ao: string } }, level: string) => {
+export const buildPrompt = (type: string, topic: { title: { am: string; ao: string } }, level: string, excludedWords: string[] = []) => {
   const topicTitle = `${topic.title.am} / ${topic.title.ao}`;
+
+  let exclusionPrompt = "";
+  if (excludedWords.length > 0) {
+    exclusionPrompt = `\n\nCRITICAL RESTRICTION: DO NOT USE any of the following vocabulary words as your main teaching focus (they have already been covered): ${excludedWords.join(", ")}. Explore completely NEW vocabulary, sentence structures, and sub-topics.`;
+  }
 
   switch (type) {
     case "LESSON":
       return `You are a bilingual language curriculum designer for Amharic and Afan Oromo.
-Generate a lesson for the topic "${topicTitle}" at ${level} level.
+Generate a lesson for the topic "${topicTitle}" at ${level} level.${exclusionPrompt}
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -100,7 +106,7 @@ Return ONLY valid JSON matching this exact structure:
       "type": "MULTIPLE_CHOICE",
       "intendedFor": "LESSON",
       "content": {
-        "question": { "am": "...", "ao": "..." },
+        "prompt": { "am": "...", "ao": "..." },
         "options": [{ "am": "...", "ao": "..." }],
         "correctIndex": 0
       }
@@ -109,17 +115,30 @@ Return ONLY valid JSON matching this exact structure:
 }
 
 Generate exactly 3-5 vocabulary items, exactly 2-3 dialogue lines (grammar illustrations only, NOT a conversation feature - they demonstrate the vocabulary in context), and exactly 2 quiz questions. Keep each vocabulary example sentence under 10 words. Both quiz questions must test a specific word from this lesson's vocabulary. The quiz array must contain exactly 2 objects.
-The "quiz" array MUST contain exactly 2 objects. Each object must use ONE of the following formats:
-1) MULTIPLE_CHOICE: { "type": "MULTIPLE_CHOICE", "intendedFor": "LESSON", "content": { "question": { "am": "...", "ao": "..." }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
-2) MATCHING: { "type": "MATCHING", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "pairs": [{ "left": "...", "right": "..." }] } }
-3) SCRAMBLE: { "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "scrambled": ["...", "...", "..."], "answer": "..." } }
-4) CLOZE: { "type": "CLOZE", "intendedFor": "LESSON", "content": { "sentence": { "am": "_____...", "ao": "_____..." }, "answer": { "am": "...", "ao": "..." } } }
 
-All text must be authentic, natural language, not transliteration.`;
+CRITICAL QUIZ RULES FOR BIDIRECTIONAL LEARNING:
+This app serves TWO learner groups: Amharic speakers learning Oromo AND Oromo speakers learning Amharic.
+Every quiz question MUST work correctly for BOTH directions. Here is how:
+
+- For MULTIPLE_CHOICE: The "prompt" field MUST be a vocabulary word/phrase as a PARALLEL TRANSLATION pair: { "am": "<Amharic word>", "ao": "<Oromo equivalent>" }. The app will show the word in the learner's TARGET language, and the options in the learner's NATIVE language. The options are also parallel pairs. The correct option is the correct translation of the prompt word. Example:
+  prompt: { "am": "ሰላም", "ao": "Nagaa" }, options: [{ "am": "አመሰግናለሁ", "ao": "Galatoomi" }, { "am": "ሰላም", "ao": "Nagaa" }, { "am": "ደህና ሁን", "ao": "Nagaatti" }], correctIndex: 1
+  → Amharic native sees "Nagaa" and picks "ሰላም" ✓. Oromo native sees "ሰላም" and picks "Nagaa" ✓.
+  DO NOT write prompts like "What does X mean?" — just put the raw word/phrase.
+
+- For MATCHING: pairs must use "left" for Amharic words and "right" for their Oromo translations. Example:
+  pairs: [{ "left": "ሰላም", "right": "Nagaa" }, { "left": "አመሰግናለሁ", "right": "Galatoomi" }]
+
+- For SCRAMBLE: "prompt" is a translation hint in both languages. "scrambled" and "answer" must BOTH be objects: { "am": [...], "ao": [...] } and { "am": "...", "ao": "..." }. The app shows the target language version.
+  scrambled: { "am": ["ነህ?", "እንዴት"], "ao": ["jirta?", "Akkam"] }, answer: { "am": "እንዴት ነህ?", "ao": "Akkam jirta?" }
+
+- For CLOZE: "textWithBlank" must contain a blank in BOTH languages (use exactly 7 underscores: "_______"). "options" is a parallel array, and "correctIndex" is an integer (0-based) pointing to the correct option.
+  textWithBlank: { "am": "_______ ነኝ።", "ao": "_______ dha." }, options: [{ "am": "ደህና", "ao": "Nagaa" }, { "am": "ሰላም", "ao": "Nagaa" }], correctIndex: 0
+
+ABSOLUTELY NO ENGLISH anywhere in the output. No English words, no English translations, no English labels. Every single string must be in Amharic or Afan Oromo only. Speaker names must be Ethiopian/Oromo names (e.g. አማኑኤል, ፋጡማ, Leemmaa, Chaaltuu).`;
 
     case "DIALOGUE":
       return `You are a bilingual dialogue writer for Amharic and Afan Oromo.
-Generate an interactive dialogue for the topic "${topicTitle}" at ${level} level.
+Generate an interactive dialogue for the topic "${topicTitle}" at ${level} level.${exclusionPrompt}
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -140,17 +159,18 @@ Return ONLY valid JSON matching this exact structure:
       "characterId": "char2",
       "content": { "am": "...", "ao": "..." },
       "isInteractive": true,
-      "question": { "am": "What should you say?", "ao": "Maal jechuu qabda?" },
+      "question": { "am": "ምን ማለት አለብህ?", "ao": "Maal jechuu qabda?" },
       "options": [
-        { "am": "Option 1 am", "ao": "Option 1 ao" },
-        { "am": "Option 2 am", "ao": "Option 2 ao" },
-        { "am": "Option 3 am", "ao": "Option 3 ao" }
+        { "am": "ምርጫ 1", "ao": "Filannoo 1" },
+        { "am": "ምርጫ 2", "ao": "Filannoo 2" },
+        { "am": "ምርጫ 3", "ao": "Filannoo 3" }
       ],
       "correctAnswerIndex": 0
     }
   ]
 }
-Generate 6-8 dialogue lines. Make 2-3 of them interactive with questions. Use realistic conversational language.`;
+Generate 6-8 dialogue lines. Make 2-3 of them interactive with questions. Use realistic conversational language.
+ABSOLUTELY NO ENGLISH anywhere. Character names must be Ethiopian/Oromo names. Every string must be in Amharic or Afan Oromo only.`;
 
     case "WRITING":
       return `You are a bilingual writing exercise designer for Amharic and Afan Oromo.
@@ -164,7 +184,8 @@ Return ONLY valid JSON matching this exact structure. Note the type can be eithe
     { "am": "Hint in Amharic", "ao": "Hint in Oromo" }
   ],
   "sampleAnswer": { "am": "Expected answer in Amharic", "ao": "Expected answer in Oromo" }
-}`;
+}
+ABSOLUTELY NO ENGLISH anywhere. Every string must be in Amharic or Afan Oromo only.`;
 
     case "SPEAKING":
       return `You are a bilingual pronunciation coach for Amharic and Afan Oromo.
@@ -174,27 +195,38 @@ Return ONLY valid JSON matching this exact structure:
 {
   "prompt": { "am": "Instruction telling user what to say in Amharic", "ao": "Same in Oromo" },
   "expectedText": { "am": "The exact phrase to pronounce in Amharic", "ao": "The exact phrase in Oromo" }
-}`;
+}
+ABSOLUTELY NO ENGLISH anywhere. Every string must be in Amharic or Afan Oromo only.`;
 
     case "QUESTION":
       return `You are a bilingual quiz question designer for Amharic and Afan Oromo.
-Generate 3 quiz questions for the topic "${topicTitle}" at ${level} level.
+Generate 3 quiz questions for the topic "${topicTitle}" at ${level} level.${exclusionPrompt}
 
 Return ONLY a valid JSON array. Each question must match ONE of these types:
 
+CRITICAL: These questions serve BOTH Amharic-native and Oromo-native learners simultaneously.
+The app shows the prompt in the learner's TARGET language and options in their NATIVE language.
+So every field must contain PARALLEL TRANSLATIONS that work in both directions.
+
 Type "MULTIPLE_CHOICE":
-{ "type": "MULTIPLE_CHOICE", "intendedFor": "LESSON", "content": { "question": { "am": "...", "ao": "..." }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
+{ "type": "MULTIPLE_CHOICE", "intendedFor": "BOTH", "content": { "prompt": { "am": "<Amharic word>", "ao": "<Oromo equivalent>" }, "options": [{ "am": "...", "ao": "..." }], "correctIndex": 0 } }
+The "prompt" is a single vocabulary word/phrase as a parallel pair. NOT a sentence like "What does X mean?". Just the raw word.
+The correct option at correctIndex must be the exact translation pair of the prompt word.
 
 Type "MATCHING":
-{ "type": "MATCHING", "intendedFor": "TEST", "content": { "prompt": { "am": "...", "ao": "..." }, "pairs": [{ "left": "Amharic word", "right": "Oromo translation" }] } }
+{ "type": "MATCHING", "intendedFor": "BOTH", "content": { "prompt": { "am": "ትክክለኛውን ጥንድ አዛምድ", "ao": "Walsimsiisi sirrii filadhu" }, "pairs": [{ "left": "<Amharic word>", "right": "<Oromo translation>" }] } }
+"left" is ALWAYS an Amharic word, "right" is ALWAYS its Oromo translation.
 
 Type "SCRAMBLE":
-{ "type": "SCRAMBLE", "intendedFor": "LESSON", "content": { "prompt": { "am": "...", "ao": "..." }, "scrambled": ["...", "...", "..."], "answer": "..." } }
+{ "type": "SCRAMBLE", "intendedFor": "BOTH", "content": { "prompt": { "am": "<translation hint in Amharic>", "ao": "<translation hint in Oromo>" }, "scrambled": { "am": ["word1", "word2"], "ao": ["word1", "word2"] }, "answer": { "am": "correct Amharic sentence", "ao": "correct Oromo sentence" } } }
+scrambled and answer MUST be objects with both "am" and "ao" versions.
 
 Type "CLOZE":
-{ "type": "CLOZE", "intendedFor": "LESSON", "content": { "sentence": { "am": "_____...", "ao": "_____..." }, "answer": { "am": "...", "ao": "..." } } }
+{ "type": "CLOZE", "intendedFor": "BOTH", "content": { "prompt": { "am": "ባዶ ቦታውን ይሙሉ", "ao": "Bakka duwwaa guuti" }, "textBeforeBlank": { "am": "First part of sentence ", "ao": "First part of sentence " }, "textAfterBlank": { "am": " second part", "ao": " second part" }, "options": [{ "am": "wrong", "ao": "wrong" }, { "am": "correct", "ao": "correct" }], "correctAnswer": { "am": "correct", "ao": "correct" } } }
+Provide a full sentence with one vocabulary word missing. Split the sentence into textBeforeBlank and textAfterBlank. Do NOT put 'answer here' or '...' in the text.
 
-Mix the types. Generate exactly 3 questions.`;
+Mix the types. Generate exactly 3 questions.
+ABSOLUTELY NO ENGLISH anywhere. Every string must be in Amharic or Afan Oromo only.`;
 
     case "TOPIC":
       return `You are a bilingual curriculum designer for Amharic and Afan Oromo.
@@ -219,7 +251,8 @@ Return ONLY valid JSON matching this exact structure:
 The tips field is equivalent to Duolingo's 'Tips' feature - it appears as a lightbulb icon
 on the topic card and opens a modal before learners start their first lesson.
 Write tips as if explaining to a complete beginner. Use encouraging, clear language.
-All text must be authentic natural language, not transliteration.`;
+All text must be authentic natural language, not transliteration.
+ABSOLUTELY NO ENGLISH anywhere. Every string must be in Amharic or Afan Oromo only.`;
 
     default:
       throw new ExpertGeneratorError("Unsupported content type", 400);
@@ -234,12 +267,16 @@ export class ExpertContentGenerator {
 
     let lastError: any = null;
 
+    // Inject a random seed to force variety in the generated content and prevent duplicate output
+    const seed = Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    const randomizedPrompt = prompt + `\n\n[System directive: Ensure absolute uniqueness for this generation cycle. Internal variation seed: ${seed}. Do NOT output this seed, just use it to randomize your vocabulary choices and sentence structures.]`;
+
     for (const modelName of modelsToTry) {
       const model = getModel(modelName);
 
       for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
         try {
-          const result = await model.generateContent(prompt);
+          const result = await model.generateContent(randomizedPrompt);
           const raw = result.response.text();
           return parseJsonResponse(raw);
         } catch (error: any) {
@@ -267,8 +304,14 @@ export class ExpertContentGenerator {
       throw new ExpertGeneratorError("Topic not found", 404);
     }
 
+    // Fetch existing vocabulary to avoid repetition
+    const existingLessons = await Lesson.find({ topicId }).select("vocabulary.am").lean();
+    const excludedWords = existingLessons
+      .flatMap((l) => l.vocabulary?.map((v) => v.am) || [])
+      .filter((word): word is string => Boolean(word));
+
     const normalizedType = type.toUpperCase();
-    const prompt = buildPrompt(normalizedType, topic, level);
+    const prompt = buildPrompt(normalizedType, topic, level, excludedWords);
     return this.generateFromPrompt(prompt);
   }
 }

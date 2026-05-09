@@ -1,11 +1,14 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Topic } from "./topic.model";
-
 import { generateSlug } from "../../utils/slugify";
 import { Lesson } from "./lesson.model";
 import { Question } from "./question.model";
 import { Progress } from "../study/progress.model";
+import { Dialogue } from "../dialogue/dialogue.model";
+import { WritingExercise } from "../writtingExercise/writingExercise.model";
+import { SpeakingExercise } from "../speaking/speakingExercise.model";
+import { YoutubeVideo } from "../video/youtubeVideo.model";
 
 export const createTopic = async (req: Request, res: Response) => {
   try {
@@ -121,22 +124,55 @@ export const publishTopic = async (req: Request, res: Response) => {
 };
 
 
+import { WritingAttempt } from "../writtingExercise/WritingAttempt.model";
+
 export const deleteTopic = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    console.log(`[DELETE TOPIC] Attempting to delete topic: ${id}`);
 
     const topic = await Topic.findById(id);
-    if (!topic) return res.status(404).json({ message: "Topic not found" });
+    if (!topic) {
+      console.warn(`[DELETE TOPIC] Topic ${id} not found`);
+      return res.status(404).json({ message: "Topic not found" });
+    }
 
-    await Promise.all([
+    // 1. Get all lesson IDs for this topic to clean up their progress/attempts
+    const lessons = await Lesson.find({ topicId: id }).select("_id").lean();
+    const lessonIds = lessons.map((l) => l._id);
+
+    // 2. Comprehensive cleanup of all associated content
+    console.log(`[DELETE TOPIC] Cleaning up associated content for topic: ${id}`);
+    
+    const results = await Promise.allSettled([
       Lesson.deleteMany({ topicId: id }),
       Question.deleteMany({ topicId: id }),
+      Dialogue.deleteMany({ topicId: id }),
+      WritingExercise.deleteMany({ topicId: id }),
+      SpeakingExercise.deleteMany({ topicId: id }),
+      YoutubeVideo.deleteMany({ topicId: id }),
+      WritingAttempt.deleteMany({ topicId: id }),
+      Progress.deleteMany({ 
+        $or: [
+          { contentId: id, contentType: "TOPIC_TEST" },
+          { contentId: { $in: lessonIds }, contentType: "LESSON" }
+        ]
+      }),
     ]);
-    await topic.deleteOne();
 
-    res.json({ message: "Topic and related lessons/questions deleted" });
-  } catch {
-    res.status(500).json({ message: "Server error" });
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error(`[DELETE TOPIC] Step ${index} failed:`, result.reason);
+      }
+    });
+
+    await topic.deleteOne();
+    console.log(`[DELETE TOPIC] Successfully deleted topic: ${id}`);
+
+    return res.json({ message: "Topic and all related content deleted successfully" });
+  } catch (error: any) {
+    console.error("[DELETE TOPIC] Fatal error:", error);
+    return res.status(500).json({ message: "Server error", details: error.message });
   }
 };
 
