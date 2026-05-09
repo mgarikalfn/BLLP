@@ -5,6 +5,7 @@ import {
   updateUserRole,
   toggleUserStatus,
   getContentStats,
+  getAnalytics,
 } from "./admin.controller";
 
 const router = Router();
@@ -178,5 +179,52 @@ router.put("/users/:userId/status", toggleUserStatus);
  *         description: Error fetching content stats
  */
 router.get("/content-stats", getContentStats);
+
+/**
+ * @openapi
+ * /api/admin/analytics:
+ *   get:
+ *     tags:
+ *       - Admin
+ *     summary: Get platform analytics (DAU, daily signups, and weak content metrics)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved analytics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 analytics:
+ *                   type: object
+ *                   properties:
+ *                     dailyActiveUsers:
+ *                       type: integer
+ *                       description: Number of users active today
+ *                     usersJoinedToday:
+ *                       type: integer
+ *                       description: Number of users created today
+ *                     weakContent:
+ *                       type: array
+ *                       description: Top 10 worst performing content pieces
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           contentId:
+ *                             type: string
+ *                           contentType:
+ *                             type: string
+ *                           averageEaseFactor:
+ *                             type: number
+ *                           numberOfReviews:
+ *                             type: integer
+ *                           preview:
+ *                             type: string
+ *       500:
+ *         description: Error fetching analytics
+ */
+router.get("/analytics", getAnalytics);
 
 export default router;

@@ -4,6 +4,8 @@ import { User, Role, UserStatus } from "../user/user.model";
 import { Topic } from "../content/topic.model";
 import { Lesson } from "../content/lesson.model";
 import { Question } from "../content/question.model";
+import { StudyStats } from "../study/study.statts.models";
+import { Progress } from "../study/progress.model";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -150,5 +152,88 @@ export const getContentStats = async (req: AuthRequest, res: Response): Promise<
     });
   } catch (error: any) {
     res.status(500).json({ message: "Error fetching content stats", error: error.message });
+  }
+};
+
+/**
+ * GET /api/admin/analytics
+ * Return daily active users, daily signups, and weak content metrics
+ */
+export const getAnalytics = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [dailyActiveUsers, usersJoinedToday, weakContentRaw] = await Promise.all([
+      // Count DAU: active today
+      StudyStats.countDocuments({
+        lastStudyDate: { $gte: startOfToday },
+      }),
+
+      // Count new users today
+      User.countDocuments({
+        createdAt: { $gte: startOfToday },
+      }),
+
+      // Weak content computation
+      Progress.aggregate([
+        {
+          $group: {
+            _id: { contentId: "$contentId", contentType: "$contentType" },
+            averageEaseFactor: { $avg: "$easeFactor" },
+            numberOfReviews: { $sum: 1 },
+          },
+        },
+        {
+          $match: {
+            averageEaseFactor: { $lt: 2.0 },
+            numberOfReviews: { $gt: 2 },
+          },
+        },
+        { $sort: { averageEaseFactor: 1 } },
+        { $limit: 10 },
+      ]),
+    ]);
+
+    // Manual population to keep it simple and handle polymorphic cross-collection references
+    const weakContent = await Promise.all(
+      weakContentRaw.map(async (item) => {
+        const { contentId, contentType } = item._id;
+        let previewText = "Unknown Content";
+
+        if (contentType === "LESSON") {
+          const lesson = await Lesson.findById(contentId).select("title").lean();
+          if (lesson?.title) {
+            previewText = typeof lesson.title === 'string' ? lesson.title : (lesson.title.am || lesson.title.ao || "Lesson");
+          }
+        } else {
+          // Fallback to searching Question collection for other types
+          const question = await Question.findById(contentId).select("content").lean();
+          if (question?.content?.prompt) {
+             previewText = typeof question.content.prompt === 'string' 
+                ? question.content.prompt 
+                : (question.content.prompt.am || question.content.prompt.ao || "Question");
+          }
+        }
+
+        return {
+          contentId,
+          contentType,
+          averageEaseFactor: Number(item.averageEaseFactor.toFixed(2)),
+          numberOfReviews: item.numberOfReviews,
+          preview: previewText,
+        };
+      })
+    );
+
+    res.status(200).json({
+      analytics: {
+        dailyActiveUsers,
+        usersJoinedToday,
+        weakContent,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: "Error fetching analytics", error: error.message });
   }
 };
