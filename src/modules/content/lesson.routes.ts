@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createLesson, deleteLesson, getLessonById, resumeLessonAudioGeneration, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
+import { createLesson, deleteLesson, getLessonById, resumeLessonAudioGeneration, regenerateAudio, getLessonsByTopic, toggleVerification, updateLesson } from "./lesson.controller";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";     
 
 const router = Router();
@@ -81,6 +81,29 @@ router.put(
  *         description: Server error
  */
 router.put("/:id/generate-audio", resumeLessonAudioGeneration);
+
+/**
+ * @openapi
+ * /api/lessons/{id}/regenerate-audio:
+ *   put:
+ *     tags:
+ *       - Lessons
+ *     summary: Regenerate a specific audio clip for a lesson
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Audio generation result
+ *       404:
+ *         description: Lesson or vocabulary not found
+ *       500:
+ *         description: Server error
+ */
+router.put("/:id/regenerate-audio", regenerateAudio);
 
 /**
  * @openapi

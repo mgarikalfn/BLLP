@@ -394,3 +394,56 @@ export const toggleVerification = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const regenerateAudio = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { vocabIndex, isExample, language } = req.body;
+
+    if (typeof vocabIndex !== "number" || typeof isExample !== "boolean" || !language) {
+      return res.status(400).json({ message: "Missing required fields: vocabIndex, isExample, language" });
+    }
+
+    const lesson = await Lesson.findById(id);
+    if (!lesson || !lesson.vocabulary || !Array.isArray(lesson.vocabulary) || !lesson.vocabulary[vocabIndex]) {
+      return res.status(404).json({ message: "Lesson or vocabulary item not found" });
+    }
+
+    const vocab: any = lesson.vocabulary[vocabIndex];
+    let newUrl = null;
+
+    try {
+      if (isExample) {
+        if (!vocab.example) return res.status(400).json({ message: "No example exists for this vocabulary item" });
+        if (!vocab.example.audioUrl) vocab.example.audioUrl = {};
+        
+        const textToSpeak = language === "am" ? vocab.example.am : vocab.example.ao;
+        if (!textToSpeak) return res.status(400).json({ message: "No text to speak" });
+
+        const langName = language === "am" ? "amharic" : "oromo";
+        newUrl = await audioService.generateLessonAudio(textToSpeak, langName as any);
+        if (newUrl) vocab.example.audioUrl[language] = newUrl;
+      } else {
+        if (!vocab.audioUrl) vocab.audioUrl = {};
+        
+        const textToSpeak = language === "am" ? vocab.am : vocab.ao;
+        if (!textToSpeak) return res.status(400).json({ message: "No text to speak" });
+
+        const langName = language === "am" ? "amharic" : "oromo";
+        newUrl = await audioService.generateLessonAudio(textToSpeak, langName as any);
+        if (newUrl) vocab.audioUrl[language] = newUrl;
+      }
+
+      lesson.markModified(`vocabulary`);
+      await lesson.save();
+
+      return res.json({ success: true, url: newUrl, lesson });
+    } catch (error: any) {
+      console.error("Audio generation failed:", error.message);
+      return res.status(502).json({ message: "Failed to generate audio from AI service", details: error.message });
+    }
+  } catch (error: any) {
+    console.error("CRITICAL ERROR IN REGENERATE:", error);
+    return res.status(500).json({ message: "Server error", details: error.message });
+  }
+};
