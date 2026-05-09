@@ -27,6 +27,7 @@ import chatRoutes from "./modules/chat/chat.routes";
 import reportRoutes from "./modules/chat/report.routes";
 import expertRoutes from "./modules/expert/expert.routes";
 import youtubeVideoRoutes from "./modules/video/youtubeVideo.routes";
+import adminRoutes from "./modules/admin/admin.routes";
 import { startNotificationJobs } from "./cron/notification.jobs";
 import { startQuestJobs } from "./cron/quest.jobs";
 import { v2 as cloudinary } from 'cloudinary';
@@ -161,6 +162,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/expert", expertRoutes);
 app.use("/api/youtube-videos", youtubeVideoRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");

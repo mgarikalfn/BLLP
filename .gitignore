@@ -4,3 +4,4 @@ dist
 gemini-tests
 public
 test-uploads
+gcp-service-account.json

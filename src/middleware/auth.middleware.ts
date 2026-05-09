@@ -40,6 +40,22 @@ export const authenticate = async (
   }
 };
 
+export const isAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user) {
+    res.status(401).json({ message: "No user attached to request" });
+    return;
+  }
+  if (req.user.role !== "ADMIN") {
+    res.status(403).json({ message: "Forbidden - Admin access required" });
+    return;
+  }
+  next();
+};
+
 export const checkRole = (roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
