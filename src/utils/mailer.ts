@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 type VerificationEmailInput = {
   to: string;
   username: string;
-  verifyUrl: string;
+  code: string;
 };
 
 const getTransporter = () => {
@@ -26,7 +26,7 @@ const getTransporter = () => {
 export const sendVerificationEmail = async ({
   to,
   username,
-  verifyUrl,
+  code,
 }: VerificationEmailInput) => {
   const transporter = getTransporter();
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "no-reply@example.com";
@@ -35,6 +35,6 @@ export const sendVerificationEmail = async ({
     from,
     to,
     subject: "Verify your email",
-    text: `Hi ${username},\n\nPlease verify your email by visiting this link:\n${verifyUrl}\n\nIf you did not create this account, you can ignore this email.`,
+    text: `Hi ${username},\n\nYour verification code is: ${code}\n\nThis code expires in 15 minutes.\n\nIf you did not create this account, you can ignore this email.`,
   });
 };

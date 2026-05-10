@@ -13,6 +13,10 @@ import { generateAccessToken, generateRefreshToken } from "../../utils/jwt";
 import { StudyStats } from "../study/study.statts.models";
 import { sendVerificationEmail } from "../../utils/mailer";
 
+const generateVerificationCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
 export const register = async (req: Request, res: Response) => {
   try {
     const {
@@ -91,19 +95,17 @@ export const register = async (req: Request, res: Response) => {
       { upsert: true, new: false },
     );
 
-    const verificationToken = jwt.sign(
-      { id: user._id.toString(), tokenType: "email-verify" },
-      ENV.JWT_SECRET,
-      { expiresIn: "1d" },
-    );
+    const verificationCode = generateVerificationCode();
+    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000);
 
-    const baseUrl = process.env.APP_BASE_URL || "http://localhost:5000";
-    const verifyUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
+    user.verificationCode = verificationCode;
+    user.verificationExpires = verificationExpires;
+    await user.save();
 
     await sendVerificationEmail({
       to: user.email,
       username: user.username,
-      verifyUrl,
+      code: verificationCode,
     });
 
     res.status(201).json({
@@ -233,30 +235,17 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
 
 export const verifyEmail = async (req: Request, res: Response) => {
   try {
-    const token =
-      (typeof req.body?.token === "string" && req.body.token) ||
-      (typeof req.query?.token === "string" && req.query.token);
+    const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+    const code =
+      (typeof req.body?.code === "string" && req.body.code.trim()) ||
+      (typeof req.body?.token === "string" && req.body.token.trim()) ||
+      "";
 
-    if (!token) {
-      return res.status(400).json({ message: "Missing token" });
+    if (!email || !code) {
+      return res.status(400).json({ message: "email and code are required" });
     }
 
-    let decoded: { id: string; tokenType?: string };
-
-    try {
-      decoded = jwt.verify(token, ENV.JWT_SECRET) as {
-        id: string;
-        tokenType?: string;
-      };
-    } catch {
-      return res.status(400).json({ message: "Invalid or expired token" });
-    }
-
-    if (decoded.tokenType && decoded.tokenType !== "email-verify") {
-      return res.status(400).json({ message: "Invalid token" });
-    }
-
-    const user = await User.findById(decoded.id);
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -265,7 +254,21 @@ export const verifyEmail = async (req: Request, res: Response) => {
       return res.json({ message: "Email already verified" });
     }
 
+    if (!user.verificationCode || !user.verificationExpires) {
+      return res.status(400).json({ message: "Verification code expired or missing" });
+    }
+
+    if (user.verificationExpires.getTime() < Date.now()) {
+      return res.status(400).json({ message: "Verification code expired" });
+    }
+
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ message: "Invalid verification code" });
+    }
+
     user.isEmailVerified = true;
+    user.verificationCode = undefined;
+    user.verificationExpires = undefined;
     await user.save();
 
     return res.json({ message: "Email verified" });

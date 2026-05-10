@@ -116,8 +116,8 @@ router.post("/refresh", refreshAccessToken);
  *       400:
  *         description: Invalid token
  */
+//router.post("/verify-email", verifyEmail);
 router.post("/verify-email", verifyEmail);
-router.get("/verify-email", verifyEmail);
 
 /**
  * @openapi
