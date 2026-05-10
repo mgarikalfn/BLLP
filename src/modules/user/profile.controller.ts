@@ -28,7 +28,7 @@ export const getMyProfile = async (req: AuthRequest, res: Response) => {
     const [user, stats] = await Promise.all([
       User.findById(userId)
         .select(
-          "username email avatarUrl bio targetLanguage learningDirection role createdAt",
+          "username email avatarUrl bio targetLanguage learningDirection role createdAt passwordHash",
         )
         .lean(),
       StudyStats.findOne({ userId })
@@ -82,6 +82,7 @@ export const getMyProfile = async (req: AuthRequest, res: Response) => {
           avatarUrl: user.avatarUrl ?? null,
           bio: user.bio ?? null,
           joinedAt: user.createdAt,
+          hasPassword: !!user.passwordHash,
         },
         learningSettings: {
           targetLanguage: user.targetLanguage,

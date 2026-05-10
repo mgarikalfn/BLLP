@@ -38,3 +38,19 @@ export const sendVerificationEmail = async ({
     text: `Hi ${username},\n\nYour verification code is: ${code}\n\nThis code expires in 15 minutes.\n\nIf you did not create this account, you can ignore this email.`,
   });
 };
+
+export const sendPasswordResetEmail = async ({
+  to,
+  username,
+  code,
+}: VerificationEmailInput) => {
+  const transporter = getTransporter();
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "no-reply@example.com";
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: "Reset your password",
+    text: `Hi ${username},\n\nWe received a request to reset your password. Your password reset code is: ${code}\n\nThis code expires in 15 minutes.\n\nIf you did not request a password reset, you can safely ignore this email.`,
+  });
+};

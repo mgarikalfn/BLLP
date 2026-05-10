@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { register, login, refreshAccessToken, verifyEmail } from "./auth.controller";
+import { register, login, refreshAccessToken, verifyEmail, forgotPassword, resetPassword, changePassword } from "./auth.controller";
+import { authenticate } from "../../middleware/auth.middleware";
 import { googleLogin } from "./googleAuth.controller";
 
 const router = Router();
@@ -141,7 +142,86 @@ router.post("/verify-email", verifyEmail);
  *         description: Login successful
  *       400:
  *         description: Invalid token or missing fields
+ *       403:
+ *         description: User banned
  */
 router.post("/google-login", googleLogin);
+
+/**
+ * @openapi
+ * /api/auth/forgot-password:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Request a password reset code
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Code sent
+ */
+router.post("/forgot-password", forgotPassword);
+
+/**
+ * @openapi
+ * /api/auth/reset-password:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Reset password with OTP code
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, code, newPassword]
+ *             properties:
+ *               email:
+ *                 type: string
+ *               code:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ */
+router.post("/reset-password", resetPassword);
+
+/**
+ * @openapi
+ * /api/auth/change-password:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Change password for logged in user
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentPassword, newPassword]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password changed successful
+ */
+router.post("/change-password", authenticate, changePassword);
 
 export default router;

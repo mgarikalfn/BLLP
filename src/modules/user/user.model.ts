@@ -36,6 +36,8 @@ export interface IUser extends Document {
   refreshToken?: string;
   verificationCode?: string;
   verificationExpires?: Date;
+  resetPasswordCode?: string;
+  resetPasswordExpires?: Date;
   role: Role;
   userStatus: UserStatus;
   ProficiencyLevel: ProficiencyLevel;
@@ -57,6 +59,8 @@ const userSchema = new Schema<IUser>(
     refreshToken: { type: String, required: false },
     verificationCode: { type: String, required: false },
     verificationExpires: { type: Date, required: false },
+    resetPasswordCode: { type: String, required: false },
+    resetPasswordExpires: { type: Date, required: false },
     role: {
       type: String,
       enum: Object.values(Role),

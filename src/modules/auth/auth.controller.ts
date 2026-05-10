@@ -11,7 +11,7 @@ import { Role } from "../user/user.model";
 import { ENV } from "../../config/env";
 import { generateAccessToken, generateRefreshToken } from "../../utils/jwt";
 import { StudyStats } from "../study/study.statts.models";
-import { sendVerificationEmail } from "../../utils/mailer";
+import { sendVerificationEmail, sendPasswordResetEmail } from "../../utils/mailer";
 
 const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -166,8 +166,8 @@ export const login = async (req: Request, res: Response) => {
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -274,6 +274,125 @@ export const verifyEmail = async (req: Request, res: Response) => {
     return res.json({ message: "Email verified" });
   } catch (error) {
     console.error("Verify email error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+    if (!email) {
+      return res.status(400).json({ message: "email is required" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.json({ message: "If an account with that email exists, we have sent a reset code." });
+    }
+
+    if (!user.passwordHash) {
+       return res.status(400).json({ message: "Use Google login for this account" });
+    }
+
+    const otp = generateVerificationCode();
+    
+    user.resetPasswordCode = otp;
+    user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    await user.save();
+
+    await sendPasswordResetEmail({
+      to: user.email,
+      username: user.username,
+      code: otp,
+    });
+
+    return res.json({ message: "If an account with that email exists, we have sent a reset code." });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ message: "email, code, and newPassword are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters long" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+
+    if (!user.resetPasswordCode || !user.resetPasswordExpires) {
+      return res.status(400).json({ message: "Reset code expired or missing" });
+    }
+
+    if (user.resetPasswordExpires.getTime() < Date.now()) {
+      return res.status(400).json({ message: "Reset code expired" });
+    }
+
+    if (user.resetPasswordCode !== code) {
+      return res.status(400).json({ message: "Invalid reset code" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = hashed;
+    user.resetPasswordCode = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    return res.json({ message: "Password successfully reset" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const changePassword = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id; 
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "currentPassword and newPassword are required" });
+    }
+
+    if (newPassword.length < 6) {
+       return res.status(400).json({ message: "New password must be at least 6 characters long" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.passwordHash) {
+       return res.status(400).json({ message: "Cannot change password for Google accounts" });
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      return res.status(400).json({ message: "Incorrect current password" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = hashed;
+    await user.save();
+
+    return res.json({ message: "Password successfully changed" });
+  } catch (error) {
+    console.error("Change password error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };
