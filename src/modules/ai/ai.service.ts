@@ -157,7 +157,10 @@ export class AIDictionaryService {
     const topic = await Topic.findOne(query).select("title").lean();
 
     if (!topic) {
-      throw new DictionaryServiceError("Topic not found", 404);
+      return {
+        topicTitle: "General vocabulary",
+        grammarNotes: "No specific grammar notes available.",
+      };
     }
 
     const lessons = await Lesson.find({ topicId: topic._id })
