@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Types } from "mongoose";
 import { Topic } from "../content/topic.model";
 import { Lesson } from "../content/lesson.model";
 
@@ -142,20 +143,24 @@ export class AIDictionaryService {
   }
 
   private static async getTopicContext(topicId?: string) {
-    if (!topicId) {
+    if (!topicId || topicId === "null" || topicId === "undefined") {
       return {
         topicTitle: "General vocabulary",
         grammarNotes: "No specific grammar notes available.",
       };
     }
 
-    const topic = await Topic.findById(topicId).select("title").lean();
+    const query = Types.ObjectId.isValid(topicId) 
+      ? { _id: topicId } 
+      : { slug: topicId };
+
+    const topic = await Topic.findOne(query).select("title").lean();
 
     if (!topic) {
       throw new DictionaryServiceError("Topic not found", 404);
     }
 
-    const lessons = await Lesson.find({ topicId })
+    const lessons = await Lesson.find({ topicId: topic._id })
       .select("grammarNotes")
       .lean();
 
