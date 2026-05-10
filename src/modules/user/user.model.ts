@@ -30,7 +30,8 @@ export enum LearningDirection {
 export interface IUser extends Document {
   email: string;
   username: string;
-  passwordHash: string;
+  passwordHash?: string;
+  googleId?: string;
   role: Role;
   userStatus: UserStatus;
   ProficiencyLevel: ProficiencyLevel;
@@ -46,7 +47,8 @@ const userSchema = new Schema<IUser>(
   {
     email: { type: String, required: true, unique: true },
     username: { type: String, unique: true, trim: true, required: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, required: false },
+    googleId: { type: String, required: false },
     role: {
       type: String,
       enum: Object.values(Role),

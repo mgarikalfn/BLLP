@@ -113,6 +113,10 @@ export const login = async (req: Request, res: Response) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
+    if (!user.passwordHash) {
+      return res.status(400).json({ message: "Use Google login for this account" });
+    }
+
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(400).json({ message: "Invalid credentials" });
 

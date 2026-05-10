@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { register, login } from "./auth.controller";
+import { googleLogin } from "./googleAuth.controller";
 
 const router = Router();
 
@@ -77,5 +78,30 @@ router.post("/register", register);
  *         description: Invalid credentials or missing fields
  */
 router.post("/login", login);
+
+/**
+ * @openapi
+ * /api/auth/google-login:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Login or sign up with Google
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       400:
+ *         description: Invalid token or missing fields
+ */
+router.post("/google-login", googleLogin);
 
 export default router;
