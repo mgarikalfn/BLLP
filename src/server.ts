@@ -2,6 +2,7 @@ import express from "express";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
 import authRoutes from "./modules/auth/auth.routes";
@@ -134,8 +135,13 @@ app.get('/api-docs.json', (_req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.send(swaggerSpec);
 });
-app.use(cors());
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+  : true;
+
+app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 // Serve the uploads directory statically so you can access it via URL
 app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));

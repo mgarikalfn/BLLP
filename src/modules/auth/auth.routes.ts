@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { register, login } from "./auth.controller";
+import { register, login, refreshAccessToken, verifyEmail } from "./auth.controller";
 import { googleLogin } from "./googleAuth.controller";
 
 const router = Router();
@@ -78,6 +78,46 @@ router.post("/register", register);
  *         description: Invalid credentials or missing fields
  */
 router.post("/login", login);
+
+/**
+ * @openapi
+ * /api/auth/refresh:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Refresh access token
+ *     responses:
+ *       200:
+ *         description: New access token issued
+ *       401:
+ *         description: Invalid or missing refresh token
+ */
+router.post("/refresh", refreshAccessToken);
+
+/**
+ * @openapi
+ * /api/auth/verify-email:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Verify user email
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               token:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email verified
+ *       400:
+ *         description: Invalid token
+ */
+router.post("/verify-email", verifyEmail);
+router.get("/verify-email", verifyEmail);
 
 /**
  * @openapi

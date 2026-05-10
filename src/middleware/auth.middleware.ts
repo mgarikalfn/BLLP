@@ -6,6 +6,7 @@ import { User, UserStatus } from "../modules/user/user.model";
 export interface AuthUser {
   id: string;
   role: string;
+  tokenType?: string;
 }
 
 export interface AuthRequest extends Request {
@@ -25,11 +26,21 @@ export const authenticate = async (
 
   try {
     const decoded = jwt.verify(token, ENV.JWT_SECRET as string) as AuthUser;
+
+    if (decoded.tokenType && decoded.tokenType !== "access") {
+      res.status(401).json({ message: "Invalid token" });
+      return;
+    }
     
     // Check if user is BANNED
     const user = await User.findById(decoded.id);
     if (!user || user.userStatus === UserStatus.BANNED) {
       res.status(403).json({ message: "Forbidden - User is banned" });
+      return;
+    }
+
+    if (!user.isEmailVerified) {
+      res.status(403).json({ message: "Email not verified" });
       return;
     }
 

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import {
   LearningDirection,
   ProficiencyLevel,
@@ -7,8 +8,10 @@ import {
   User,
 } from "../user/user.model";
 import { Role } from "../user/user.model";
-import { generateToken } from "../../utils/jwt";
+import { ENV } from "../../config/env";
+import { generateAccessToken, generateRefreshToken } from "../../utils/jwt";
 import { StudyStats } from "../study/study.statts.models";
+import { sendVerificationEmail } from "../../utils/mailer";
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -88,13 +91,30 @@ export const register = async (req: Request, res: Response) => {
       { upsert: true, new: false },
     );
 
+    const verificationToken = jwt.sign(
+      { id: user._id.toString(), tokenType: "email-verify" },
+      ENV.JWT_SECRET,
+      { expiresIn: "1d" },
+    );
+
+    const baseUrl = process.env.APP_BASE_URL || "http://localhost:5000";
+    const verifyUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
+
+    await sendVerificationEmail({
+      to: user.email,
+      username: user.username,
+      verifyUrl,
+    });
+
     res.status(201).json({
+      message: "Verification email sent",
       id: user._id,
       username: user.username,
       targetLanguage: user.targetLanguage,
       learningDirection: user.learningDirection,
       avatarUrl: user.avatarUrl ?? null,
       bio: user.bio ?? null,
+      isEmailVerified: user.isEmailVerified,
     });
   } catch (error) {
     console.error("Register Error:", error);
@@ -120,16 +140,37 @@ export const login = async (req: Request, res: Response) => {
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(400).json({ message: "Invalid credentials" });
 
-    if (user.userStatus === "BANNED")
+    if (user.userStatus === "BANNED") {
       return res.status(403).json({ message: "User banned" });
+    }
 
-    const token = generateToken({
+    if (!user.isEmailVerified) {
+      return res.status(403).json({ message: "Email not verified" });
+    }
+
+    const accessToken = generateAccessToken({
       id: user._id.toString(),
       role: user.role,
+      tokenType: "access",
+    });
+
+    const refreshToken = generateRefreshToken({
+      id: user._id.toString(),
+      tokenType: "refresh",
+    });
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     res.json({
-      token,
+      accessToken,
       id: user._id.toString(),
       username: user.username,
       role: user.role,
@@ -138,5 +179,98 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error", error: error instanceof Error ? error.message : String(error) });
+  }
+};
+
+export const refreshAccessToken = async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(401).json({ message: "Missing refresh token" });
+    }
+
+    let decoded: { id: string; tokenType?: string };
+
+    try {
+      decoded = jwt.verify(refreshToken, ENV.JWT_SECRET) as {
+        id: string;
+        tokenType?: string;
+      };
+    } catch {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    if (decoded.tokenType && decoded.tokenType !== "refresh") {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user || user.userStatus === "BANNED") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (!user.isEmailVerified) {
+      return res.status(403).json({ message: "Email not verified" });
+    }
+
+    if (!user.refreshToken || user.refreshToken !== refreshToken) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    const accessToken = generateAccessToken({
+      id: user._id.toString(),
+      role: user.role,
+      tokenType: "access",
+    });
+
+    return res.json({ accessToken });
+  } catch (error) {
+    console.error("Refresh token error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const verifyEmail = async (req: Request, res: Response) => {
+  try {
+    const token =
+      (typeof req.body?.token === "string" && req.body.token) ||
+      (typeof req.query?.token === "string" && req.query.token);
+
+    if (!token) {
+      return res.status(400).json({ message: "Missing token" });
+    }
+
+    let decoded: { id: string; tokenType?: string };
+
+    try {
+      decoded = jwt.verify(token, ENV.JWT_SECRET) as {
+        id: string;
+        tokenType?: string;
+      };
+    } catch {
+      return res.status(400).json({ message: "Invalid or expired token" });
+    }
+
+    if (decoded.tokenType && decoded.tokenType !== "email-verify") {
+      return res.status(400).json({ message: "Invalid token" });
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isEmailVerified) {
+      return res.json({ message: "Email already verified" });
+    }
+
+    user.isEmailVerified = true;
+    await user.save();
+
+    return res.json({ message: "Email verified" });
+  } catch (error) {
+    console.error("Verify email error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };

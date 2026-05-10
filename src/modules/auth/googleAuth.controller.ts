@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { OAuth2Client } from "google-auth-library";
 import { generateSlug } from "../../utils/slugify";
-import { generateToken } from "../../utils/jwt";
+import { generateAccessToken, generateRefreshToken } from "../../utils/jwt";
 import { Role, ProficiencyLevel, User } from "../user/user.model";
 import { StudyStats } from "../study/study.statts.models";
 
@@ -58,6 +58,11 @@ export const googleLogin = async (req: Request, res: Response) => {
     const googleId = payload.sub;
     const name = payload.name || payload.given_name || email.split("@")[0];
     const avatarUrl = payload.picture;
+    const isEmailVerified = payload.email_verified === true;
+
+    if (!isEmailVerified) {
+      return res.status(403).json({ message: "Google email not verified" });
+    }
 
     let user = await User.findOne({ $or: [{ googleId }, { email }] });
 
@@ -78,6 +83,11 @@ export const googleLogin = async (req: Request, res: Response) => {
         shouldSave = true;
       }
 
+      if (!user.isEmailVerified && isEmailVerified) {
+        user.isEmailVerified = true;
+        shouldSave = true;
+      }
+
       if (shouldSave) {
         await user.save();
       }
@@ -89,6 +99,7 @@ export const googleLogin = async (req: Request, res: Response) => {
         username,
         googleId,
         avatarUrl,
+        isEmailVerified,
         ProficiencyLevel: ProficiencyLevel.BEGINNER,
         role: Role.LEARNER,
       });
@@ -100,13 +111,29 @@ export const googleLogin = async (req: Request, res: Response) => {
       );
     }
 
-    const token = generateToken({
+    const accessToken = generateAccessToken({
       id: user._id.toString(),
       role: user.role,
+      tokenType: "access",
+    });
+
+    const refreshToken = generateRefreshToken({
+      id: user._id.toString(),
+      tokenType: "refresh",
+    });
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.json({
-      token,
+      accessToken,
       id: user._id.toString(),
       username: user.username,
       role: user.role,

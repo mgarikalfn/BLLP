@@ -32,6 +32,8 @@ export interface IUser extends Document {
   username: string;
   passwordHash?: string;
   googleId?: string;
+  isEmailVerified: boolean;
+  refreshToken?: string;
   role: Role;
   userStatus: UserStatus;
   ProficiencyLevel: ProficiencyLevel;
@@ -49,6 +51,8 @@ const userSchema = new Schema<IUser>(
     username: { type: String, unique: true, trim: true, required: true },
     passwordHash: { type: String, required: false },
     googleId: { type: String, required: false },
+    isEmailVerified: { type: Boolean, default: false },
+    refreshToken: { type: String, required: false },
     role: {
       type: String,
       enum: Object.values(Role),
