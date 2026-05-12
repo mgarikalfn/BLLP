@@ -12,6 +12,7 @@ import {
   getSeasonLeaderboard,
   getSeasonTier,
 } from "./study.controller";
+import { startCertification, submitCertification } from "./certification.controller";
 import { authenticate } from "../../middleware/auth.middleware";
 
 const router = Router();
@@ -111,6 +112,73 @@ router.get("/session", authenticate, startStudySession);
  *         description: Success
  */
 router.post("/progress/topic-test", authenticate, submitTopicTest);
+
+
+/**
+ * @openapi
+ * /api/study/certifications/start:
+ *   post:
+ *     tags:
+ *       - Study
+ *     summary: POST /certifications/start
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [level]
+ *             properties:
+ *               level:
+ *                 type: string
+ *                 enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.post("/certifications/start", authenticate, startCertification);
+
+
+/**
+ * @openapi
+ * /api/study/certifications/{attemptId}/submit:
+ *   post:
+ *     tags:
+ *       - Study
+ *     summary: POST /certifications/{attemptId}/submit
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [answers]
+ *             properties:
+ *               answers:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [questionId, answerGiven]
+ *                   properties:
+ *                     questionId:
+ *                       type: string
+ *                     answerGiven:
+ *                       nullable: true
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.post("/certifications/:attemptId/submit", authenticate, submitCertification);
 
 
 /**
