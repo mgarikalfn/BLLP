@@ -1,18 +1,20 @@
 import { Router } from "express";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";
 import { Role } from "../user/user.model";
-import { createReport, getPendingReports, banUser, dismissReport } from "./report.controller";
+import { createReport, getPendingReports, banUser, resolveReport } from "./report.controller";
 
 const router = Router();
 
 router.use(authenticate);
 
-// User endponit to submit a report
+// User endpoint to submit a report
 router.post("/", createReport);
 
-// Admin endpoints
-router.get("/pending", checkRole([Role.ADMIN]), getPendingReports);
+// Moderation (Expert/Admin) endpoints
+router.get("/pending", checkRole([Role.EXPERT, Role.ADMIN]), getPendingReports);
+router.patch("/:reportId/resolve", checkRole([Role.EXPERT, Role.ADMIN]), resolveReport);
+
+// Admin specific (Legacy support or direct ban)
 router.post("/ban-user", checkRole([Role.ADMIN]), banUser);
-router.patch("/:reportId/dismiss", checkRole([Role.ADMIN]), dismissReport);
 
 export default router;

@@ -158,7 +158,14 @@ export const getConversationMessages = async (req: AuthRequest, res: Response): 
     const messages = await Message.find({ conversationId })
       .sort({ createdAt: 1 }); // Oldest first for chat history
 
-    res.json({ messages });
+    const sanitizedMessages = messages.map(msg => {
+      if (msg.isDeleted) {
+        msg.text = "This message was removed by a moderator.";
+      }
+      return msg;
+    });
+
+    res.json({ messages: sanitizedMessages });
   } catch (error) {
     console.error("Fetch messages error:", error);
     res.status(500).json({ message: "Server error", error: String(error) });

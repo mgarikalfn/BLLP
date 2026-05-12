@@ -7,6 +7,7 @@ import { Question } from "../content/question.model";
 import { StudyStats } from "../study/study.statts.models";
 import { Progress } from "../study/progress.model";
 import { SystemConfig } from "./systemConfig.model";
+import { Report } from "../chat/chat.models";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -129,8 +130,15 @@ export const toggleUserStatus = async (req: AuthRequest, res: Response): Promise
 export const getContentStats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     // Run all count queries concurrently
-    const [totalUsers, totalExperts, totalTopics, totalLessons, totalQuestions, lessonsPendingReview] =
-      await Promise.all([
+    const [
+      totalUsers, 
+      totalExperts, 
+      totalTopics, 
+      totalLessons, 
+      totalQuestions, 
+      lessonsPendingReview,
+      pendingReports
+    ] = await Promise.all([
         User.countDocuments({}),
         User.countDocuments({ role: Role.EXPERT }),
         Topic.countDocuments({}),
@@ -139,6 +147,7 @@ export const getContentStats = async (req: AuthRequest, res: Response): Promise<
         Lesson.countDocuments({
           $or: [{ status: "NEEDS_REVIEW" }, { isVerified: false }],
         }),
+        Report.countDocuments({ status: "PENDING" }),
       ]);
 
     res.status(200).json({
@@ -149,6 +158,7 @@ export const getContentStats = async (req: AuthRequest, res: Response): Promise<
         totalLessons,
         totalQuestions,
         lessonsPendingReview,
+        pendingReports,
       },
     });
   } catch (error: any) {

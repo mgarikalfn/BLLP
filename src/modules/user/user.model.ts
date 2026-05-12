@@ -45,6 +45,11 @@ export interface IUser extends Document {
   learningDirection: LearningDirection;
   avatarUrl?: string;
   bio?:string;
+  moderationFlags?: {
+    isFlagged: boolean;
+    warningCount: number;
+    lastModeratedAt?: Date;
+  };
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -93,6 +98,11 @@ const userSchema = new Schema<IUser>(
     bio:{
       type:String,
       required:false,
+    },
+    moderationFlags: {
+      isFlagged: { type: Boolean, default: false },
+      warningCount: { type: Number, default: 0 },
+      lastModeratedAt: { type: Date },
     },
   },
   { timestamps: true },

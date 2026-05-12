@@ -5,3 +5,5 @@ gemini-tests
 public
 test-uploads
 gcp-service-account.json
+.config.kiro
+design.md

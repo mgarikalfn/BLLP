@@ -5,14 +5,15 @@ import { generateAccessToken, generateRefreshToken } from "../../utils/jwt";
 import { Role, ProficiencyLevel, User } from "../user/user.model";
 import { StudyStats } from "../study/study.statts.models";
 
-const getGoogleClientId = () => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+const getGoogleClientIds = () => {
+  const ids = process.env.GOOGLE_CLIENT_IDS || process.env.GOOGLE_CLIENT_ID;
 
-  if (!clientId) {
-    throw new Error("Missing GOOGLE_CLIENT_ID");
+  if (!ids) {
+    throw new Error("Missing GOOGLE_CLIENT_IDS or GOOGLE_CLIENT_ID");
   }
 
-  return clientId;
+  // Split by comma and remove whitespace
+  return ids.split(",").map((id) => id.trim());
 };
 
 const resolveUsername = async (raw: string) => {
@@ -41,11 +42,12 @@ export const googleLogin = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "token is required" });
     }
 
-    const clientId = getGoogleClientId();
-    const client = new OAuth2Client(clientId);
+    const clientIds = getGoogleClientIds();
+    // Use the first client ID for initializing the OAuth2Client (it doesn't actually matter for verifyIdToken)
+    const client = new OAuth2Client(clientIds[0]);
     const ticket = await client.verifyIdToken({
       idToken,
-      audience: clientId,
+      audience: clientIds, // Accepts an array of client IDs
     });
 
     const payload = ticket.getPayload();
