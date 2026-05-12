@@ -15,6 +15,10 @@ interface IDialogueLine {
     am: string; // Amharic
     ao: string; // Oromo
   };
+  audioUrl?: {
+    am?: string;
+    ao?: string;
+  };
   isInteractive: boolean;
   question?: {
     am: string;
@@ -70,6 +74,10 @@ const dialogueSchema = new Schema<IDialogue>(
         content: {
           am: { type: String, required: true },
           ao: { type: String, required: true },
+        },
+        audioUrl: {
+          am: { type: String },
+          ao: { type: String },
         },
         isInteractive: { type: Boolean, default: false },
         question: {

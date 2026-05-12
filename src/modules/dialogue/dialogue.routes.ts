@@ -8,6 +8,8 @@ import {
 	getDialoguesByTopic,
 	toggleDialogueVerification,
 	updateDialogue,
+	generateDialogueAudio,
+	regenerateDialogueAudio,
 } from "./dialogue.controller";
 import { authenticate, checkRole } from "../../middleware/auth.middleware";
 
@@ -318,6 +320,76 @@ router.patch(
 	checkRole(["EXPERT", "ADMIN"]),
 	toggleDialogueVerification,
 );
+
+
+/**
+ * @openapi
+ * /api/dialogues/{id}/generate-audio:
+ *   put:
+ *     tags:
+ *       - Dialogue
+ *     summary: Generate missing audio for dialogue lines
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Dialogue ObjectId
+ *     responses:
+ *       200:
+ *         description: Audio generation completed
+ *       404:
+ *         description: Dialogue not found
+ *       500:
+ *         description: Server error
+ */
+router.put("/:id/generate-audio", authenticate, checkRole(["EXPERT", "ADMIN"]), generateDialogueAudio);
+
+/**
+ * @openapi
+ * /api/dialogues/{id}/regenerate-audio:
+ *   put:
+ *     tags:
+ *       - Dialogue
+ *     summary: Regenerate specific dialogue line audio
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Dialogue ObjectId
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [lineIndex, language]
+ *             properties:
+ *               lineIndex:
+ *                 type: integer
+ *                 description: Index of the dialogue line (0-based)
+ *               language:
+ *                 type: string
+ *                 enum: [am, ao]
+ *                 description: Language to regenerate
+ *     responses:
+ *       200:
+ *         description: Audio regenerated successfully
+ *       400:
+ *         description: Invalid parameters
+ *       404:
+ *         description: Dialogue not found
+ *       500:
+ *         description: Server error
+ */
+router.put("/:id/regenerate-audio", authenticate, checkRole(["EXPERT", "ADMIN"]), regenerateDialogueAudio);
 
 
 /**

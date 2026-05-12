@@ -7,3 +7,8 @@ test-uploads
 gcp-service-account.json
 .config.kiro
 design.md
+DIALOGUE_AUDIO_FRONTEND_COMPLETE.md
+DIALOGUE_AUDIO_IMPLEMENTATION_COMPLETE.md
+DIALOGUE_AUDIO_IMPLEMENTATION_PLAN.md
+DIALOGUE_AUDIO_QUICK_GUIDE.md
+requirements.md

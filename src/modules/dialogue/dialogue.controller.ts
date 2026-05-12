@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 import { Dialogue, DifficultyLevel } from "./dialogue.model";
 import { Progress } from "../study/progress.model";
 import { StudyStats } from "../study/study.statts.models";
+import { GeminiAudioService } from "../../services/audio.services";
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const isValidDifficultyLevel = (value: unknown): value is DifficultyLevel => {
   return (
@@ -265,6 +268,148 @@ export const toggleDialogueVerification = async (req: Request, res: Response) =>
     });
   } catch (error: any) {
     console.error("Toggle dialogue verification error:", error);
+    return res.status(500).json({ message: "Server error", details: error.message });
+  }
+};
+
+
+export const generateDialogueAudio = async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid dialogue id" });
+    }
+
+    const dialogue = await Dialogue.findById(id);
+    if (!dialogue) {
+      return res.status(404).json({ message: "Dialogue not found" });
+    }
+
+    const audioService = new GeminiAudioService();
+    let generatedCount = 0;
+    let attemptedCount = 0;
+
+    // Iterate through all dialogue lines
+    for (const line of dialogue.lines) {
+      // Initialize audioUrl if not exists
+      if (!line.audioUrl) {
+        line.audioUrl = {};
+      }
+
+      // Generate Amharic audio if missing
+      if (line.content.am && !line.audioUrl.am) {
+        attemptedCount++;
+        try {
+          console.log(`Generating Amharic dialogue audio for: ${line.content.am}`);
+          line.audioUrl.am = await audioService.generateLessonAudio(line.content.am, "amharic");
+          generatedCount++;
+          dialogue.markModified('lines');
+          await dialogue.save();
+          await sleep(500); // Rate limiting
+        } catch (e: any) {
+          console.error("Failed on Amharic", e.message);
+          if (e.message?.includes("429")) {
+            console.log("⚠️ Hit API rate limit. Sleeping for 50 seconds...");
+            await sleep(50000);
+          }
+        }
+      }
+
+      // Generate Oromo audio if missing
+      if (line.content.ao && !line.audioUrl.ao) {
+        attemptedCount++;
+        try {
+          console.log(`Generating Oromo dialogue audio for: ${line.content.ao}`);
+          line.audioUrl.ao = await audioService.generateLessonAudio(line.content.ao, "oromo");
+          generatedCount++;
+          dialogue.markModified('lines');
+          await dialogue.save();
+          await sleep(500); // Rate limiting
+        } catch (e: any) {
+          console.error("Failed on Oromo", e.message);
+          if (e.message?.includes("429")) {
+            console.log("⚠️ Hit API rate limit. Sleeping for 50 seconds...");
+            await sleep(50000);
+          }
+        }
+      }
+    }
+
+    return res.json({
+      message: "Audio generation completed",
+      attempted: attemptedCount,
+      generated: generatedCount,
+      dialogue,
+    });
+  } catch (error: any) {
+    console.error("Generate dialogue audio error:", error);
+    return res.status(500).json({ message: "Server error", details: error.message });
+  }
+};
+
+export const regenerateDialogueAudio = async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const { lineIndex, language } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid dialogue id" });
+    }
+
+    if (typeof lineIndex !== "number" || lineIndex < 0) {
+      return res.status(400).json({ message: "Valid lineIndex is required" });
+    }
+
+    if (language !== "am" && language !== "ao") {
+      return res.status(400).json({ message: "Language must be 'am' or 'ao'" });
+    }
+
+    const dialogue = await Dialogue.findById(id);
+    if (!dialogue) {
+      return res.status(404).json({ message: "Dialogue not found" });
+    }
+
+    if (lineIndex >= dialogue.lines.length) {
+      return res.status(400).json({ message: "Line index out of bounds" });
+    }
+
+    const line = dialogue.lines[lineIndex];
+    const textToSpeak = language === "am" ? line.content.am : line.content.ao;
+
+    if (!textToSpeak) {
+      return res.status(400).json({ message: `No text found for language ${language}` });
+    }
+
+    const audioService = new GeminiAudioService();
+    const langName = language === "am" ? "amharic" : "oromo";
+    
+    console.log(`Regenerating ${langName} audio for line ${lineIndex}: ${textToSpeak}`);
+    
+    const newUrl = await audioService.generateLessonAudio(textToSpeak, langName as any);
+
+    if (!line.audioUrl) {
+      line.audioUrl = {};
+    }
+    
+    if (language === "am") {
+      line.audioUrl.am = newUrl;
+    } else {
+      line.audioUrl.ao = newUrl;
+    }
+
+    dialogue.markModified('lines');
+    await dialogue.save();
+
+    return res.json({
+      message: "Audio regenerated successfully",
+      lineIndex,
+      language,
+      newUrl,
+      dialogue,
+    });
+  } catch (error: any) {
+    console.error("Regenerate dialogue audio error:", error);
     return res.status(500).json({ message: "Server error", details: error.message });
   }
 };
