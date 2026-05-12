@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { register, login, refreshAccessToken, verifyEmail, forgotPassword, resetPassword, changePassword } from "./auth.controller";
+import { register, login, refreshAccessToken, verifyEmail, forgotPassword, resetPassword, changePassword, logout } from "./auth.controller";
 import { authenticate } from "../../middleware/auth.middleware";
 import { googleLogin } from "./googleAuth.controller";
 
@@ -223,5 +223,6 @@ router.post("/reset-password", resetPassword);
  *         description: Password changed successful
  */
 router.post("/change-password", authenticate, changePassword);
+router.post("/logout", logout);
 
 export default router;

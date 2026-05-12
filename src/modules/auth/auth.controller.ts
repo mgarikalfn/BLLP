@@ -396,3 +396,29 @@ export const changePassword = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+export const logout = async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+
+    if (refreshToken) {
+      // Clear the refresh token from the database
+      await User.findOneAndUpdate(
+        { refreshToken: refreshToken },
+        { $unset: { refreshToken: 1 } }
+      );
+    }
+
+    // Clear the cookie
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
+
+    return res.json({ success: true, message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Logout error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
