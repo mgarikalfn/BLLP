@@ -94,6 +94,86 @@ const titleBuilders: Record<ContentType, TitleBuilder> = {
   TOPIC: (item) => item?.title?.am || "Topic",
 };
 
+// Audio change detection interface
+interface AudioChange {
+  index: number;
+  languages: ('am' | 'ao')[];
+  oldText: { am?: string; ao?: string };
+  newText: { am?: string; ao?: string };
+}
+
+/**
+ * Detects which vocabulary/dialogue items have changed text
+ * @param oldItems - Previous version of items
+ * @param newItems - Updated version of items
+ * @param textField - Field name containing text ('am'/'ao' for vocab, 'content' for dialogue, 'text' for lesson dialogue)
+ * @returns Array of detected changes with indices and languages
+ */
+const detectAudioChanges = (
+  oldItems: any[],
+  newItems: any[],
+  textField: string
+): AudioChange[] => {
+  const changes: AudioChange[] = [];
+
+  for (let i = 0; i < newItems.length; i++) {
+    const oldItem = oldItems[i];
+    const newItem = newItems[i];
+
+    if (!oldItem || !newItem) continue;
+
+    const changedLanguages: ('am' | 'ao')[] = [];
+    const oldText = { am: '', ao: '' };
+    const newText = { am: '', ao: '' };
+
+    // Extract text based on field type
+    let oldAm: string | undefined;
+    let oldAo: string | undefined;
+    let newAm: string | undefined;
+    let newAo: string | undefined;
+
+    if (textField === 'content') {
+      // For dialogue lines: content.am, content.ao
+      oldAm = oldItem.content?.am;
+      oldAo = oldItem.content?.ao;
+      newAm = newItem.content?.am;
+      newAo = newItem.content?.ao;
+    } else if (textField === 'text') {
+      // For lesson dialogue: text.am, text.ao
+      oldAm = oldItem.text?.am;
+      oldAo = oldItem.text?.ao;
+      newAm = newItem.text?.am;
+      newAo = newItem.text?.ao;
+    } else {
+      // For vocabulary: direct am, ao fields
+      oldAm = oldItem.am;
+      oldAo = oldItem.ao;
+      newAm = newItem.am;
+      newAo = newItem.ao;
+    }
+
+    oldText.am = oldAm || '';
+    oldText.ao = oldAo || '';
+    newText.am = newAm || '';
+    newText.ao = newAo || '';
+
+    // Detect which languages changed
+    if (oldAm !== newAm && newAm) changedLanguages.push('am');
+    if (oldAo !== newAo && newAo) changedLanguages.push('ao');
+
+    if (changedLanguages.length > 0) {
+      changes.push({
+        index: i,
+        languages: changedLanguages,
+        oldText,
+        newText,
+      });
+    }
+  }
+
+  return changes;
+};
+
 const fetchContent = async (type: ContentType, filter: FetchFilter) => {
   switch (type) {
     case "LESSON": {
@@ -406,10 +486,58 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
     delete updatedData.status;
     delete updatedData.isVerified;
 
+    // Track audio changes for response
+    const audioChanges: Record<string, any> = {};
+
     // Type-specific update logic with markModified() for nested objects/arrays
     switch (typeParam) {
       case "LESSON":
-        // Update nested objects/arrays explicitly
+        // Detect vocabulary audio changes
+        if (updatedData.vocabulary !== undefined) {
+          const vocabChanges = detectAudioChanges(
+            doc.vocabulary || [],
+            updatedData.vocabulary,
+            'am' // vocabulary items have 'am' and 'ao' fields directly
+          );
+
+          // Clear audio URLs for changed vocabulary items
+          for (const change of vocabChanges) {
+            for (const lang of change.languages) {
+              if (!updatedData.vocabulary[change.index].audioUrl) {
+                updatedData.vocabulary[change.index].audioUrl = {};
+              }
+              updatedData.vocabulary[change.index].audioUrl[lang] = null;
+            }
+          }
+
+          audioChanges.vocabulary = vocabChanges;
+          doc.vocabulary = updatedData.vocabulary;
+          doc.markModified('vocabulary');
+        }
+
+        // Detect dialogue audio changes (dialogue within lesson)
+        if (updatedData.dialogue !== undefined) {
+          const dialogueChanges = detectAudioChanges(
+            doc.dialogue || [],
+            updatedData.dialogue,
+            'text' // dialogue items have 'text' field with {am, ao}
+          );
+
+          // Clear audio URLs for changed dialogue items
+          for (const change of dialogueChanges) {
+            for (const lang of change.languages) {
+              if (!updatedData.dialogue[change.index].audioUrl) {
+                updatedData.dialogue[change.index].audioUrl = {};
+              }
+              updatedData.dialogue[change.index].audioUrl[lang] = null;
+            }
+          }
+
+          audioChanges.dialogue = dialogueChanges;
+          doc.dialogue = updatedData.dialogue;
+          doc.markModified('dialogue');
+        }
+
         if (updatedData.title !== undefined) {
           doc.title = updatedData.title;
           doc.markModified('title');
@@ -418,15 +546,6 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
           doc.grammarNotes = updatedData.grammarNotes;
           doc.markModified('grammarNotes');
         }
-        if (updatedData.vocabulary !== undefined) {
-          doc.vocabulary = updatedData.vocabulary;
-          doc.markModified('vocabulary');
-        }
-        if (updatedData.dialogue !== undefined) {
-          doc.dialogue = updatedData.dialogue;
-          doc.markModified('dialogue');
-        }
-        // Update simple fields
         if (updatedData.order !== undefined) doc.order = updatedData.order;
         if (updatedData.topicId !== undefined) doc.topicId = updatedData.topicId;
         if (updatedData.generatedByAI !== undefined) doc.generatedByAI = updatedData.generatedByAI;
@@ -450,6 +569,29 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
         break;
 
       case "DIALOGUE":
+        // Detect dialogue line audio changes
+        if (updatedData.lines !== undefined) {
+          const lineChanges = detectAudioChanges(
+            doc.lines || [],
+            updatedData.lines,
+            'content' // dialogue lines have 'content' field with {am, ao}
+          );
+
+          // Clear audio URLs for changed lines
+          for (const change of lineChanges) {
+            for (const lang of change.languages) {
+              if (!updatedData.lines[change.index].audioUrl) {
+                updatedData.lines[change.index].audioUrl = {};
+              }
+              updatedData.lines[change.index].audioUrl[lang] = null;
+            }
+          }
+
+          audioChanges.lines = lineChanges;
+          doc.lines = updatedData.lines;
+          doc.markModified('lines');
+        }
+
         if (updatedData.scenario !== undefined) {
           doc.scenario = updatedData.scenario;
           doc.markModified('scenario');
@@ -457,10 +599,6 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
         if (updatedData.characters !== undefined) {
           doc.characters = updatedData.characters;
           doc.markModified('characters');
-        }
-        if (updatedData.lines !== undefined) {
-          doc.lines = updatedData.lines;
-          doc.markModified('lines');
         }
         if (updatedData.level !== undefined) doc.level = updatedData.level;
         if (updatedData.topicId !== undefined) doc.topicId = updatedData.topicId;
@@ -533,7 +671,14 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
 
     await doc.save();
 
-    return res.json(doc);
+    // Return response with audio change information
+    const response: any = doc.toObject();
+    if (Object.keys(audioChanges).length > 0) {
+      response._audioChanges = audioChanges;
+      response._message = "Content updated. Audio URLs cleared for changed items. Use 'Generate Missing Audio' to regenerate.";
+    }
+
+    return res.json(response);
   } catch (error: any) {
     console.error("Update content error:", error);
     return res.status(500).json({ message: "Server error", details: error?.message });
