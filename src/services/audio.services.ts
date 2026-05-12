@@ -61,7 +61,7 @@ export class GeminiAudioService {
       const pcmBuffer = Buffer.from(audioPart.inlineData.data, "base64");
       const wavBuffer = this.addWavHeader(pcmBuffer, 24000); 
 
-      const fileName = `${language}_${Date.now()}.wav`;
+      const fileName = `vocabulary/${language}_${Date.now()}.wav`;
       
       // Upload to Google Cloud Storage
       const file = this.bucket.file(fileName);

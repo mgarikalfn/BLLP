@@ -1,6 +1,9 @@
 import { Router } from "express";
+import multer from "multer";
 import { authenticate } from "../../middleware/auth.middleware";
 import { getMyProfile, updateProfile } from "./profile.controller";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
@@ -50,6 +53,6 @@ router.get("/me", authenticate, getMyProfile);
  *       200:
  *         description: Profile updated
  */
-router.patch("/update", authenticate, updateProfile);
+router.patch("/update", authenticate, upload.single("avatar"), updateProfile);
 
 export default router;

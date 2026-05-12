@@ -10,6 +10,7 @@ import { StudyStats } from "../study/study.statts.models";
 import { Progress } from "../study/progress.model";
 import { Lesson } from "../content/lesson.model";
 import { AuthRequest } from "../../middleware/auth.middleware";
+import { cloudStorageService } from "../../services/storage.service";
 
 const getCurrentTopicName = (topicTitle: any, lang: targetLanguage) => {
   if (!topicTitle) return null;
@@ -119,9 +120,27 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     }
 
     const userId = new mongoose.Types.ObjectId(req.user.id);
-    const { avatarUrl, bio, learningDirection, targetLanguage: nextTargetLanguage } = req.body;
+    const { bio, learningDirection, targetLanguage: nextTargetLanguage } = req.body;
+    let { avatarUrl } = req.body;
 
     const updates: Record<string, unknown> = {};
+
+    // Handle file upload if present
+    if (req.file) {
+      if (!req.file.mimetype.startsWith("image/")) {
+        return res.status(400).json({ success: false, message: "File must be an image" });
+      }
+      
+      const fileExt = req.file.originalname.split('.').pop() || 'jpg';
+      const fileName = `avatars/avatar_${userId.toString()}_${Date.now()}.${fileExt}`;
+      
+      try {
+        avatarUrl = await cloudStorageService.uploadFile(req.file.buffer, fileName, req.file.mimetype);
+      } catch (error) {
+        console.error("Avatar upload error:", error);
+        return res.status(500).json({ success: false, message: "Failed to upload image" });
+      }
+    }
 
     if (avatarUrl !== undefined) {
       if (typeof avatarUrl !== "string") {
