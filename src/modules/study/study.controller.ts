@@ -1,9 +1,11 @@
 import { Request, Response } from "express";
+import { Types } from "mongoose";
 import { Progress } from "./progress.model";
 import { calculateSM2 } from "./sm2.utils";
 import { Lesson } from "../content/lesson.model";
 import { StudyStats } from "./study.statts.models";
-import { User } from "../user/user.model";
+import { User, ProficiencyLevel } from "../user/user.model";
+import { Topic } from "../content/topic.model";
 import { CURRENT_SEASON } from "./season.config";
 import { calculateTier } from "./tier.utils";
 import { getSeasonReward } from "./season.rewards";
@@ -15,6 +17,85 @@ interface AuthRequest extends Request {
     role: string;
   };
 }
+
+export const submitTopicTest = async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user?.id;
+
+  try {
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { topicId, score } = req.body;
+    const numericScore = Number(score);
+
+    if (!topicId || !Types.ObjectId.isValid(topicId)) {
+      return res.status(400).json({ message: "Invalid topicId" });
+    }
+
+    if (!Number.isFinite(numericScore)) {
+      return res.status(400).json({ message: "Invalid score" });
+    }
+
+    const passingScore = 80;
+    let leveledUp = false;
+    let newLevel: ProficiencyLevel | null = null;
+
+    if (numericScore >= passingScore) {
+      await Progress.findOneAndUpdate(
+        {
+          userId,
+          contentId: topicId,
+          contentType: "TOPIC_TEST",
+        },
+        {
+          $max: { bestScore: numericScore },
+          $set: { lastReviewed: new Date(), nextReview: new Date() },
+        },
+        { upsert: true, setDefaultsOnInsert: true, new: true }
+      );
+
+      const user = await User.findById(userId).select("ProficiencyLevel").lean();
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const currentLevel = user.ProficiencyLevel;
+      const levelOrder: ProficiencyLevel[] = [
+        ProficiencyLevel.BEGINNER,
+        ProficiencyLevel.INTERMEDIATE,
+        ProficiencyLevel.ADVANCED,
+      ];
+
+      const currentIndex = levelOrder.indexOf(currentLevel);
+      const nextLevelValue = currentIndex >= 0 ? levelOrder[currentIndex + 1] : null;
+
+      const levelTopics = await Topic.find({ level: currentLevel }).select("_id").lean();
+      const levelTopicIds = levelTopics.map((topic) => topic._id);
+
+      if (levelTopicIds.length > 0) {
+        const completedCount = await Progress.countDocuments({
+          userId,
+          contentType: "TOPIC_TEST",
+          contentId: { $in: levelTopicIds },
+          bestScore: { $gte: passingScore },
+        });
+
+        if (completedCount === levelTopicIds.length && nextLevelValue) {
+          await User.findByIdAndUpdate(userId, { ProficiencyLevel: nextLevelValue });
+          leveledUp = true;
+          newLevel = nextLevelValue;
+        }
+      }
+    }
+
+    return res.json({ success: true, leveledUp, newLevel });
+  } catch (error) {
+    console.error("submitTopicTest error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 
 export const reviewFlashcard = async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;

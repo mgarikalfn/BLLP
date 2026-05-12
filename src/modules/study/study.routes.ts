@@ -3,6 +3,7 @@ import {
   reviewFlashcard,
   getDueLessons,
   startStudySession,
+  submitTopicTest,
   getStudyStats,
   getWeakAreas,
   getUserLevel,
@@ -82,6 +83,34 @@ router.get("/due", authenticate, getDueLessons);
  *         description: Success
  */
 router.get("/session", authenticate, startStudySession);
+
+
+/**
+ * @openapi
+ * /api/study/progress/topic-test:
+ *   post:
+ *     tags:
+ *       - Study
+ *     summary: POST /progress/topic-test
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [topicId, score]
+ *             properties:
+ *               topicId:
+ *                 type: string
+ *               score:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.post("/progress/topic-test", authenticate, submitTopicTest);
 
 
 /**

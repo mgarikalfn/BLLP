@@ -5,6 +5,7 @@ import { Dialogue } from "../dialogue/dialogue.model";
 import { WritingExercise } from "../writtingExercise/writingExercise.model";
 import { SpeakingExercise } from "../speaking/speakingExercise.model";
 import { Progress } from "../study/progress.model";
+import { User, ProficiencyLevel } from "../user/user.model";
 
 type AuthRequest = Request & {
   user?: { id: string };
@@ -13,15 +14,29 @@ type AuthRequest = Request & {
 export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const user = await User.findById(userId).select("ProficiencyLevel").lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     // 1. Pagination & Filtering
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 5;
-    const level = req.query.level as string;
     const skip = (page - 1) * limit;
 
     const filter: any = {};
-    if (level) filter.level = level;
+    const levelOrder: ProficiencyLevel[] = [
+      ProficiencyLevel.BEGINNER,
+      ProficiencyLevel.INTERMEDIATE,
+      ProficiencyLevel.ADVANCED,
+    ];
+    const userLevelIndex = Math.max(levelOrder.indexOf(user.ProficiencyLevel), 0);
+    const allowedLevels = levelOrder.slice(0, userLevelIndex + 1);
+    filter.level = { $in: allowedLevels };
     filter.isPublished = true;
 
     // 2. Fetch Topics
@@ -34,11 +49,15 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
     const topicIds = topics.map(t => t._id);
 
     // 3. Fetch All Content Types in Parallel
+    const queryFilter = {
+      topicId: { $in: topicIds },
+      status: "PUBLISHED",
+    };
     const [allLessons, allDialogues, allWriting, allSpeaking] = await Promise.all([
-      Lesson.find({ topicId: { $in: topicIds } }).sort({ order: 1 }).lean(),
-      Dialogue.find({ topicId: { $in: topicIds } }).lean(),
-      WritingExercise.find({ topicId: { $in: topicIds } }).lean(),
-      SpeakingExercise.find({ topicId: { $in: topicIds } }).lean()
+      Lesson.find(queryFilter).sort({ order: 1 }).lean(),
+      Dialogue.find(queryFilter).lean(),
+      WritingExercise.find(queryFilter).lean(),
+      SpeakingExercise.find(queryFilter).lean()
     ]);
 
     // 4. Fetch Polymorphic User Progress
@@ -82,6 +101,8 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
 
     const topicsWithPath = topics.map(topic => {
       const tId = topic._id.toString();
+      const topicLevelIndex = Math.max(levelOrder.indexOf(topic.level), 0);
+      const isAutoCompleted = topicLevelIndex < userLevelIndex;
       
       // Define the "Internal Order" for this specific topic
       // You can adjust this order based on how you want to teach
@@ -94,6 +115,15 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
 
       // Apply Status Logic to the combined sequence
       const processedSequence = rawSequence.map(item => {
+        if (isAutoCompleted) {
+          return {
+            _id: item._id,
+            title: item.title,
+            type: item.type,
+            status: "completed",
+          };
+        }
+
         const completionKey = `${item.type}:${item._id.toString()}`;
         const isCompleted = completedContentKeys.has(completionKey);
         let status = "locked";
@@ -118,18 +148,12 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
       const allTasksDone = processedSequence.every(n => n.status === "completed");
       const isTestCompleted = completedContentKeys.has(`TOPIC_TEST:${tId}`);
       
-      if (isTestCompleted) {
+      if (isAutoCompleted || isTestCompleted) {
         testStatus = "completed";
       } else if (allTasksDone && !globalActiveFound) {
         testStatus = "active";
         globalActiveFound = true;
       } else if (allTasksDone && globalActiveFound) {
-        // This means the user finished this topic, but is stuck on a later one
-        // Wait, if it's not completed in DB, it should be active if we reached here? 
-        // No, if globalActiveFound is true, it means a previous test or current test is active.
-        // Actually, if allTasksDone is true and globalActiveFound is true, but the test isn't completed,
-        // it means THIS test is the active one! (Or a previous one was). 
-        // We should just rely on globalActiveFound.
         testStatus = "locked"; 
       }
 
@@ -144,6 +168,7 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
         unitNumber: typeof topic.unitNumber === "number" ? topic.unitNumber : 0,
         tips: topic.tips || null,
         pathNodes: processedSequence, // Frontend can now map this single array
+        isAutoCompleted,
         topicTest: {
           title: "Unit Review",
           status: testStatus
