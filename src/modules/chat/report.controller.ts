@@ -3,6 +3,8 @@ import { AuthRequest } from "../../middleware/auth.middleware";
 import { Report, Message } from "./chat.models";
 import { User, UserStatus } from "../user/user.model";
 import { Types } from "mongoose";
+import { Notification } from "../notifications/notification.model";
+import { sendModerationEmail } from "../../utils/mailer";
 
 export const createReport = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -97,6 +99,8 @@ export const resolveReport = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    let updatedUser: { email?: string; username?: string; moderationFlags?: { warningCount?: number } } | null = null;
+
     // Apply action
     switch (actionTaken) {
       case "DELETE_MESSAGE":
@@ -109,16 +113,24 @@ export const resolveReport = async (req: AuthRequest, res: Response): Promise<vo
         });
         break;
       case "WARN":
-        await User.findByIdAndUpdate(report.reportedUserId, { 
-          $inc: { "moderationFlags.warningCount": 1 },
-          "moderationFlags.lastModeratedAt": new Date()
-        });
+        updatedUser = await User.findByIdAndUpdate(
+          report.reportedUserId,
+          {
+            $inc: { "moderationFlags.warningCount": 1 },
+            "moderationFlags.lastModeratedAt": new Date(),
+          },
+          { new: true, select: "email username moderationFlags.warningCount" }
+        ).lean();
         break;
       case "BAN_USER" as any:
-        await User.findByIdAndUpdate(report.reportedUserId, { 
-          userStatus: UserStatus.BANNED,
-          "moderationFlags.lastModeratedAt": new Date()
-        });
+        updatedUser = await User.findByIdAndUpdate(
+          report.reportedUserId,
+          {
+            userStatus: UserStatus.BANNED,
+            "moderationFlags.lastModeratedAt": new Date(),
+          },
+          { new: true, select: "email username moderationFlags.warningCount" }
+        ).lean();
         break;
       case "DISMISS":
         // No structural changes, just resolve the report
@@ -134,6 +146,53 @@ export const resolveReport = async (req: AuthRequest, res: Response): Promise<vo
     };
 
     await report.save();
+
+    if (actionTaken === "WARN" || actionTaken === "BAN_USER") {
+      const reportedUserId = report.reportedUserId;
+      const reason = report.reason || note;
+      const moderationAction = actionTaken === "BAN_USER" ? "BAN_USER" : "WARN";
+      const notificationType = actionTaken === "BAN_USER" ? "SYSTEM_ALERT" : "MODERATION";
+      const notificationTitle = actionTaken === "BAN_USER" ? "Security Alert" : "Account Notice";
+      const baseMessage =
+        actionTaken === "BAN_USER"
+          ? "Your account has been permanently suspended due to violations of community guidelines."
+          : "Your account received a formal warning for violating community guidelines.";
+      const message = reason ? `${baseMessage} Reason: ${reason}` : baseMessage;
+
+      void (async () => {
+        try {
+          await Notification.create({
+            userId: reportedUserId,
+            type: notificationType,
+            title: notificationTitle,
+            message,
+            metadata: {
+              reportId: report._id,
+              actionTaken,
+              reason,
+            },
+          });
+
+          const userInfo =
+            updatedUser ||
+            (await User.findById(reportedUserId)
+              .select("email username moderationFlags.warningCount")
+              .lean());
+
+          if (userInfo?.email && userInfo?.username) {
+            await sendModerationEmail({
+              to: userInfo.email,
+              username: userInfo.username,
+              action: moderationAction,
+              reason: reason || undefined,
+              warningCount: userInfo.moderationFlags?.warningCount,
+            });
+          }
+        } catch (notifyError) {
+          console.error("Moderation notify error:", notifyError);
+        }
+      })();
+    }
 
     res.json({ success: true, message: `Report resolved with action: ${actionTaken}` });
   } catch (error) {
@@ -164,6 +223,27 @@ export const banUser = async (req: AuthRequest, res: Response): Promise<void> =>
     res.json({ success: true, message: "User permanently banned." });
   } catch (error) {
     console.error("Ban user error:", error);
+    res.status(500).json({ message: "Server error", error: String(error) });
+  }
+};
+
+/**
+ * GET /api/reports/conversations/:conversationId/messages
+ * Allows Admins/Experts to view chat history for moderation context
+ */
+export const getModerationChatHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { conversationId } = req.params;
+    
+    const messages = await Message.find({ conversationId })
+      .sort({ createdAt: 1 })
+      .limit(50) // Show last 50 messages for context
+      .populate("senderId", "username")
+      .lean();
+
+    res.json(messages);
+  } catch (error) {
+    console.error("Moderation history error:", error);
     res.status(500).json({ message: "Server error", error: String(error) });
   }
 };

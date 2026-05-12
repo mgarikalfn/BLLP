@@ -6,7 +6,9 @@ export type NotificationType =
   | "LEVEL_UP"
   | "TOPIC_COMPLETE"
   | "ACHIEVEMENT"
-  | "CHAT_REQUEST";
+  | "CHAT_REQUEST"
+  | "SYSTEM_ALERT"
+  | "MODERATION";
 
 export interface INotification {
   userId: Types.ObjectId;
@@ -27,7 +29,16 @@ const notificationSchema = new Schema<INotification>(
     },
     type: {
       type: String,
-      enum: ["REVIEW_DUE", "STREAK_ALERT", "LEVEL_UP", "TOPIC_COMPLETE", "ACHIEVEMENT", "CHAT_REQUEST"],
+      enum: [
+        "REVIEW_DUE",
+        "STREAK_ALERT",
+        "LEVEL_UP",
+        "TOPIC_COMPLETE",
+        "ACHIEVEMENT",
+        "CHAT_REQUEST",
+        "SYSTEM_ALERT",
+        "MODERATION",
+      ],
       required: true,
     },
     title: { type: String, required: true },

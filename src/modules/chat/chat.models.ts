@@ -57,7 +57,7 @@ export interface IReport extends Document {
   context?: string; // Snapshot of the content at time of report
   status: ReportStatus;
   resolutionDetails?: {
-    actionTaken: "DISMISS" | "WARN" | "DELETE_MESSAGE" | "FLAG_USER";
+    actionTaken: "DISMISS" | "WARN" | "DELETE_MESSAGE" | "FLAG_USER" | "BAN_USER";
     resolvedBy: Types.ObjectId;
     resolvedAt: Date;
     note?: string;
@@ -84,7 +84,7 @@ const reportSchema = new Schema<IReport>(
       default: "PENDING" 
     },
     resolutionDetails: {
-      actionTaken: { type: String, enum: ["DISMISS", "WARN", "DELETE_MESSAGE", "FLAG_USER"] },
+      actionTaken: { type: String, enum: ["DISMISS", "WARN", "DELETE_MESSAGE", "FLAG_USER", "BAN_USER"] },
       resolvedBy: { type: Schema.Types.ObjectId, ref: "User" },
       resolvedAt: { type: Date },
       note: { type: String }
