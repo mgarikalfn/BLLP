@@ -406,7 +406,131 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
     delete updatedData.status;
     delete updatedData.isVerified;
 
-    Object.assign(doc, updatedData);
+    // Type-specific update logic with markModified() for nested objects/arrays
+    switch (typeParam) {
+      case "LESSON":
+        // Update nested objects/arrays explicitly
+        if (updatedData.title !== undefined) {
+          doc.title = updatedData.title;
+          doc.markModified('title');
+        }
+        if (updatedData.grammarNotes !== undefined) {
+          doc.grammarNotes = updatedData.grammarNotes;
+          doc.markModified('grammarNotes');
+        }
+        if (updatedData.vocabulary !== undefined) {
+          doc.vocabulary = updatedData.vocabulary;
+          doc.markModified('vocabulary');
+        }
+        if (updatedData.dialogue !== undefined) {
+          doc.dialogue = updatedData.dialogue;
+          doc.markModified('dialogue');
+        }
+        // Update simple fields
+        if (updatedData.order !== undefined) doc.order = updatedData.order;
+        if (updatedData.topicId !== undefined) doc.topicId = updatedData.topicId;
+        if (updatedData.generatedByAI !== undefined) doc.generatedByAI = updatedData.generatedByAI;
+        if (updatedData.authorId !== undefined) doc.authorId = updatedData.authorId;
+        break;
+
+      case "QUESTION":
+        // Schema.Types.Mixed requires special handling - set to undefined first, then assign
+        if (updatedData.content !== undefined) {
+          // Force Mongoose to detect the change by setting to undefined first
+          doc.set('content', undefined);
+          doc.content = JSON.parse(JSON.stringify(updatedData.content)); // Deep clone
+          doc.markModified('content');
+        }
+        if (updatedData.type !== undefined) doc.type = updatedData.type;
+        if (updatedData.intendedFor !== undefined) doc.intendedFor = updatedData.intendedFor;
+        if (updatedData.topicId !== undefined) doc.topicId = updatedData.topicId;
+        if (updatedData.lessonId !== undefined) doc.lessonId = updatedData.lessonId;
+        if (updatedData.generatedByAI !== undefined) doc.generatedByAI = updatedData.generatedByAI;
+        if (updatedData.authorId !== undefined) doc.authorId = updatedData.authorId;
+        break;
+
+      case "DIALOGUE":
+        if (updatedData.scenario !== undefined) {
+          doc.scenario = updatedData.scenario;
+          doc.markModified('scenario');
+        }
+        if (updatedData.characters !== undefined) {
+          doc.characters = updatedData.characters;
+          doc.markModified('characters');
+        }
+        if (updatedData.lines !== undefined) {
+          doc.lines = updatedData.lines;
+          doc.markModified('lines');
+        }
+        if (updatedData.level !== undefined) doc.level = updatedData.level;
+        if (updatedData.topicId !== undefined) doc.topicId = updatedData.topicId;
+        if (updatedData.generatedByAI !== undefined) doc.generatedByAI = updatedData.generatedByAI;
+        if (updatedData.authorId !== undefined) doc.authorId = updatedData.authorId;
+        break;
+
+      case "WRITING":
+        if (updatedData.prompt !== undefined) {
+          doc.prompt = updatedData.prompt;
+          doc.markModified('prompt');
+        }
+        if (updatedData.hints !== undefined) {
+          doc.hints = updatedData.hints;
+          doc.markModified('hints');
+        }
+        if (updatedData.sampleAnswer !== undefined) {
+          doc.sampleAnswer = updatedData.sampleAnswer;
+          doc.markModified('sampleAnswer');
+        }
+        if (updatedData.type !== undefined) doc.type = updatedData.type;
+        if (updatedData.level !== undefined) doc.level = updatedData.level;
+        if (updatedData.topicId !== undefined) doc.topicId = updatedData.topicId;
+        if (updatedData.generatedByAI !== undefined) doc.generatedByAI = updatedData.generatedByAI;
+        if (updatedData.authorId !== undefined) doc.authorId = updatedData.authorId;
+        break;
+
+      case "SPEAKING":
+        if (updatedData.prompt !== undefined) {
+          doc.prompt = updatedData.prompt;
+          doc.markModified('prompt');
+        }
+        if (updatedData.expectedText !== undefined) {
+          doc.expectedText = updatedData.expectedText;
+          doc.markModified('expectedText');
+        }
+        if (updatedData.referenceAudioUrl !== undefined) {
+          doc.referenceAudioUrl = updatedData.referenceAudioUrl;
+          doc.markModified('referenceAudioUrl');
+        }
+        if (updatedData.level !== undefined) doc.level = updatedData.level;
+        if (updatedData.topicId !== undefined) doc.topicId = updatedData.topicId;
+        if (updatedData.generatedByAI !== undefined) doc.generatedByAI = updatedData.generatedByAI;
+        if (updatedData.authorId !== undefined) doc.authorId = updatedData.authorId;
+        break;
+
+      case "TOPIC":
+        if (updatedData.title !== undefined) {
+          doc.title = updatedData.title;
+          doc.markModified('title');
+        }
+        if (updatedData.description !== undefined) {
+          doc.description = updatedData.description;
+          doc.markModified('description');
+        }
+        if (updatedData.tips !== undefined) {
+          doc.tips = updatedData.tips;
+          doc.markModified('tips');
+        }
+        if (updatedData.slug !== undefined) doc.slug = updatedData.slug;
+        if (updatedData.level !== undefined) doc.level = updatedData.level;
+        if (updatedData.section !== undefined) doc.section = updatedData.section;
+        if (updatedData.unitNumber !== undefined) doc.unitNumber = updatedData.unitNumber;
+        if (updatedData.thumbnailUrl !== undefined) doc.thumbnailUrl = updatedData.thumbnailUrl;
+        if (updatedData.isPublished !== undefined) doc.isPublished = updatedData.isPublished;
+        if (updatedData.generatedByAI !== undefined) doc.generatedByAI = updatedData.generatedByAI;
+        if (updatedData.authorId !== undefined) doc.authorId = updatedData.authorId;
+        break;
+    }
+
     await doc.save();
 
     return res.json(doc);
