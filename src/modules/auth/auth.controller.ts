@@ -26,8 +26,6 @@ export const register = async (req: Request, res: Response) => {
      targetLanguage: reqTargetLanguage,
       proficiencyLevel,
       learningDirection,
-      avatarUrl,
-      bio,
     } = req.body;
 
     const resolvedTargetLanguage = reqTargetLanguage as targetLanguage;
@@ -54,18 +52,6 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    if (avatarUrl !== undefined && typeof avatarUrl !== "string") {
-      return res.status(400).json({ message: "avatarUrl must be a string" });
-    }
-
-    if (bio !== undefined && typeof bio !== "string") {
-      return res.status(400).json({ message: "bio must be a string" });
-    }
-
-    if (typeof bio === "string" && bio.length > 160) {
-      return res.status(400).json({ message: "bio must be 160 characters or fewer" });
-    }
-
     // 2️⃣ Double Collision Check (Email & Username)
     const existingEmail = await User.findOne({ email });
     if (existingEmail) return res.status(400).json({ message: "Email already exists" });
@@ -84,8 +70,6 @@ export const register = async (req: Request, res: Response) => {
       targetLanguage: resolvedTargetLanguage,
       ProficiencyLevel: resolvedProficiency || ProficiencyLevel.BEGINNER,
       learningDirection: resolvedLearningDirection,
-      avatarUrl,
-      bio,
       role: Role.LEARNER,
     });
 
@@ -114,8 +98,6 @@ export const register = async (req: Request, res: Response) => {
       username: user.username,
       targetLanguage: user.targetLanguage,
       learningDirection: user.learningDirection,
-      avatarUrl: user.avatarUrl ?? null,
-      bio: user.bio ?? null,
       isEmailVerified: user.isEmailVerified,
     });
   } catch (error) {

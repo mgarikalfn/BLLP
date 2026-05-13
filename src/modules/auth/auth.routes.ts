@@ -38,11 +38,6 @@ const router = Router();
  *               learningDirection:
  *                 type: string
  *                 enum: [AM_TO_OR, OR_TO_AM]
- *               avatarUrl:
- *                 type: string
- *               bio:
- *                 type: string
- *                 maxLength: 160
  *     responses:
  *       201:
  *         description: User registered

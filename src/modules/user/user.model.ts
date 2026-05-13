@@ -50,6 +50,10 @@ export interface IUser extends Document {
     warningCount: number;
     lastModeratedAt?: Date;
   };
+  isFlagged: boolean;
+  flaggedBy?: string; // ObjectId of the expert who flagged the user
+  flaggedAt?: Date;
+  flagReason?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -104,8 +108,15 @@ const userSchema = new Schema<IUser>(
       warningCount: { type: Number, default: 0 },
       lastModeratedAt: { type: Date },
     },
+    isFlagged: { type: Boolean, default: false },
+    flaggedBy: { type: Schema.Types.ObjectId, ref: "User", required: false },
+    flaggedAt: { type: Date, required: false },
+    flagReason: { type: String, required: false },
   },
   { timestamps: true },
 );
+
+// Create index on isFlagged for admin dashboard queries
+userSchema.index({ isFlagged: 1 });
 
 export const User = model<IUser>("User", userSchema);

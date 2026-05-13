@@ -23,7 +23,13 @@ export class SpeakingEvaluationService {
 Listen to the provided audio clip and compare it to the expected text.
 Expected Text: "${expectedText}"
 
-Evaluate pronunciation and clarity.
+CRITICAL INSTRUCTIONS:
+1. If the audio is completely silent, contains only background noise, or no recognizable human speech is detected, YOU MUST set "isCorrect" to false and provide feedback stating that you couldn't hear any speech.
+2. If the speaker says something completely unrelated to the expected text, set "isCorrect" to false and explain that the spoken words do not match the expected text.
+3. Only set "isCorrect" to true if the speaker clearly and correctly spoke the expected text. Minor accent differences are okay, but the words must be correct.
+4. "transcribedText" should be exactly what you heard. Leave it empty if you heard nothing.
+
+Evaluate pronunciation and clarity based on the rules above.
 Return ONLY a valid JSON object with no markdown, no code block fences, and no extra keys.
 The feedback must be written only in ${feedbackLanguage}.
 Use exactly this schema:

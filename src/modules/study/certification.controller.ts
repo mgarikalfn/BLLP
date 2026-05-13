@@ -63,49 +63,47 @@ const sanitizeQuestion = (question: any) => {
   };
 };
 
-const extractCorrectAnswer = (content: any) => {
-  if (!content || typeof content !== "object") {
-    return undefined;
-  }
-
-  return (
-    content.correctAnswer ??
-    content.correctAnswers ??
-    content.correctIndex ??
-    content.correctAnswerIndex ??
-    content.correctOptionIndex ??
-    content.correctOptionIndexes ??
-    content.answer ??
-    content.answers ??
-    content.solution
-  );
+const normalizeString = (str: any) => {
+  if (typeof str !== "string") return "";
+  return str.toLowerCase().replace(/[^\w\s\u1200-\u137F]/gi, "").replace(/\s+/g, " ").trim();
 };
 
-const stableStringify = (value: any): string => {
-  if (value === null || value === undefined) {
-    return String(value);
+const isAnswerCorrect = (question: any, answerGiven: any) => {
+  const content = question.content;
+  if (!content) return false;
+
+  switch (question.type) {
+    case "MULTIPLE_CHOICE": {
+      const correct = content.correctAnswer || content.answer;
+      if (!correct || !answerGiven) return false;
+      return (correct.am === answerGiven.am && correct.ao === answerGiven.ao) || 
+             (correct.am === answerGiven.text && correct.ao === answerGiven.translation);
+    }
+    case "MATCHING": {
+      if (!Array.isArray(content.pairs) || !Array.isArray(answerGiven)) return false;
+      if (content.pairs.length !== answerGiven.length) return false;
+      return answerGiven.every((givenPair: any) => 
+        content.pairs.some((correctPair: any) => 
+          correctPair.left === givenPair.left && correctPair.right === givenPair.right
+        )
+      );
+    }
+    case "SCRAMBLE": {
+      if (!Array.isArray(answerGiven)) return false;
+      const composed = normalizeString(answerGiven.join(" "));
+      const expectedAm = normalizeString(content.correctSentence?.am || content.answer?.am);
+      const expectedAo = normalizeString(content.correctSentence?.ao || content.answer?.ao);
+      return composed === expectedAm || composed === expectedAo;
+    }
+    case "CLOZE": {
+      if (typeof answerGiven !== "string") return false;
+      const correctAm = content.correctAnswer?.am;
+      const correctAo = content.correctAnswer?.ao;
+      return answerGiven === correctAm || answerGiven === correctAo;
+    }
+    default:
+      return false;
   }
-
-  if (typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
-
-  const keys = Object.keys(value).sort();
-  const entries = keys.map((key) => `"${key}":${stableStringify(value[key])}`);
-  return `{${entries.join(",")}}`;
-};
-
-const isAnswerCorrect = (content: any, answerGiven: any) => {
-  const correctAnswer = extractCorrectAnswer(content);
-  if (correctAnswer === undefined) {
-    return false;
-  }
-
-  return stableStringify(correctAnswer) === stableStringify(answerGiven);
 };
 
 export const startCertification = async (req: Request, res: Response) => {
@@ -204,7 +202,7 @@ export const submitCertification = async (req: Request, res: Response) => {
     const userAnswers = answers.map((answer) => {
       const questionId = answer.questionId;
       const question = questionMap.get(questionId);
-      const isCorrect = question ? isAnswerCorrect(question.content, answer.answerGiven) : false;
+      const isCorrect = question ? isAnswerCorrect(question, answer.answerGiven) : false;
 
       if (isCorrect) {
         correctCount += 1;

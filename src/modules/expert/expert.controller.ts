@@ -100,6 +100,7 @@ interface AudioChange {
   languages: ('am' | 'ao')[];
   oldText: { am?: string; ao?: string };
   newText: { am?: string; ao?: string };
+  isExample?: boolean;
 }
 
 /**
@@ -107,12 +108,14 @@ interface AudioChange {
  * @param oldItems - Previous version of items
  * @param newItems - Updated version of items
  * @param textField - Field name containing text ('am'/'ao' for vocab, 'content' for dialogue, 'text' for lesson dialogue)
+ * @param isExample - If true, checks example field instead of main text field (for vocabulary examples)
  * @returns Array of detected changes with indices and languages
  */
 const detectAudioChanges = (
   oldItems: any[],
   newItems: any[],
-  textField: string
+  textField: string,
+  isExample: boolean = false
 ): AudioChange[] => {
   const changes: AudioChange[] = [];
 
@@ -132,7 +135,13 @@ const detectAudioChanges = (
     let newAm: string | undefined;
     let newAo: string | undefined;
 
-    if (textField === 'content') {
+    if (isExample) {
+      // For vocabulary examples: example.am, example.ao
+      oldAm = oldItem.example?.am;
+      oldAo = oldItem.example?.ao;
+      newAm = newItem.example?.am;
+      newAo = newItem.example?.ao;
+    } else if (textField === 'content') {
       // For dialogue lines: content.am, content.ao
       oldAm = oldItem.content?.am;
       oldAo = oldItem.content?.ao;
@@ -167,6 +176,7 @@ const detectAudioChanges = (
         languages: changedLanguages,
         oldText,
         newText,
+        isExample,
       });
     }
   }
@@ -510,7 +520,29 @@ export const updateContent = async (req: AuthRequest, res: Response) => {
             }
           }
 
+          // Detect vocabulary example audio changes
+          const exampleChanges = detectAudioChanges(
+            doc.vocabulary || [],
+            updatedData.vocabulary,
+            'am',
+            true // isExample = true
+          );
+
+          // Clear example audio URLs for changed examples
+          for (const change of exampleChanges) {
+            for (const lang of change.languages) {
+              if (!updatedData.vocabulary[change.index].example) {
+                updatedData.vocabulary[change.index].example = {};
+              }
+              if (!updatedData.vocabulary[change.index].example.audioUrl) {
+                updatedData.vocabulary[change.index].example.audioUrl = {};
+              }
+              updatedData.vocabulary[change.index].example.audioUrl[lang] = null;
+            }
+          }
+
           audioChanges.vocabulary = vocabChanges;
+          audioChanges.vocabularyExamples = exampleChanges;
           doc.vocabulary = updatedData.vocabulary;
           doc.markModified('vocabulary');
         }

@@ -103,18 +103,16 @@ Return ONLY valid JSON matching this exact structure:
   ],
   "quiz": [
     {
-      "type": "MULTIPLE_CHOICE",
+      "type": "MULTIPLE_CHOICE", // Can be MULTIPLE_CHOICE, MATCHING, SCRAMBLE, or CLOZE
       "intendedFor": "LESSON",
       "content": {
-        "prompt": { "am": "...", "ao": "..." },
-        "options": [{ "am": "...", "ao": "..." }],
-        "correctIndex": 0
+        // ... structure depends on the type (see rules below)
       }
     }
   ]
 }
 
-Generate exactly 3-5 vocabulary items, exactly 2-3 dialogue lines (grammar illustrations only, NOT a conversation feature - they demonstrate the vocabulary in context), and exactly 2 quiz questions. Keep each vocabulary example sentence under 10 words. Both quiz questions must test a specific word from this lesson's vocabulary. The quiz array must contain exactly 2 objects.
+Generate exactly 3-5 vocabulary items, exactly 2-3 dialogue lines (grammar illustrations only, NOT a conversation feature - they demonstrate the vocabulary in context), and exactly 2 quiz questions. Keep each vocabulary example sentence under 10 words. Both quiz questions must test a specific word from this lesson's vocabulary. The quiz array must contain exactly 2 objects. Mix the question types! Do not just use MULTIPLE_CHOICE.
 
 CRITICAL QUIZ RULES FOR BIDIRECTIONAL LEARNING:
 This app serves TWO learner groups: Amharic speakers learning Oromo AND Oromo speakers learning Amharic.
@@ -131,8 +129,8 @@ Every quiz question MUST work correctly for BOTH directions. Here is how:
 - For SCRAMBLE: "prompt" is a translation hint in both languages. "scrambled" and "answer" must BOTH be objects: { "am": [...], "ao": [...] } and { "am": "...", "ao": "..." }. The app shows the target language version.
   scrambled: { "am": ["ነህ?", "እንዴት"], "ao": ["jirta?", "Akkam"] }, answer: { "am": "እንዴት ነህ?", "ao": "Akkam jirta?" }
 
-- For CLOZE: "textWithBlank" must contain a blank in BOTH languages (use exactly 7 underscores: "_______"). "options" is a parallel array, and "correctIndex" is an integer (0-based) pointing to the correct option.
-  textWithBlank: { "am": "_______ ነኝ።", "ao": "_______ dha." }, options: [{ "am": "ደህና", "ao": "Nagaa" }, { "am": "ሰላም", "ao": "Nagaa" }], correctIndex: 0
+- For CLOZE: Provide a full sentence with one vocabulary word missing. Split the sentence into textBeforeBlank and textAfterBlank. Do NOT put 'answer here' or '...' in the text. "options" is a parallel array, and "correctAnswer" is the correct option.
+  textBeforeBlank: { "am": "First part ", "ao": "First part " }, textAfterBlank: { "am": " second part.", "ao": " second part." }, options: [{ "am": "wrong", "ao": "wrong" }, { "am": "correct", "ao": "correct" }], correctAnswer: { "am": "correct", "ao": "correct" }
 
 ABSOLUTELY NO ENGLISH anywhere in the output. No English words, no English translations, no English labels. Every single string must be in Amharic or Afan Oromo only. Speaker names must be Ethiopian/Oromo names (e.g. አማኑኤል, ፋጡማ, Leemmaa, Chaaltuu).`;
 

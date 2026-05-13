@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../../middleware/auth.middleware";
-import { Report, Message } from "./chat.models";
+import { Report, Message, ReportType, ReportStatus } from "./chat.models";
 import { User, UserStatus } from "../user/user.model";
 import { Types } from "mongoose";
 import { Notification } from "../notifications/notification.model";
@@ -36,18 +36,18 @@ export const createReport = async (req: AuthRequest, res: Response): Promise<voi
     );
 
     if (updatedMessage && updatedMessage.reportCount >= 3) {
-      updatedMessage.isDeleted = true;
+      updatedMessage.isAutoHidden = true;
       await updatedMessage.save();
     }
 
     const report = await Report.create({
-      targetId: messageId,
+      messageId: messageId,
       reporterId,
       reportedUserId,
       reason,
-      type: type || "OTHER",
+      type: type || ReportType.SPAM,
       context: message.text,
-      status: "PENDING"
+      status: ReportStatus.PENDING
     });
 
     res.status(201).json({ 
@@ -66,11 +66,11 @@ export const createReport = async (req: AuthRequest, res: Response): Promise<voi
 export const getPendingReports = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     // Both Experts and Admins can see this
-    const reports = await Report.find({ status: { $in: ["PENDING", "UNDER_REVIEW"] } })
+    const reports = await Report.find({ status: { $in: [ReportStatus.PENDING, ReportStatus.UNDER_REVIEW] } })
       .populate("reporterId", "username")
       .populate("reportedUserId", "username email userStatus")
       .populate({
-        path: "targetId",
+        path: "messageId",
         select: "text createdAt reportCount senderId conversationId"
       })
       .sort({ createdAt: -1 });
@@ -86,7 +86,7 @@ export const resolveReport = async (req: AuthRequest, res: Response): Promise<vo
   try {
     const expertId = req.user?.id;
     const { reportId } = req.params;
-    const { actionTaken, note } = req.body;
+    const { actionTaken, notes } = req.body;
 
     if (!actionTaken) {
       res.status(400).json({ message: "actionTaken is required" });
@@ -103,16 +103,23 @@ export const resolveReport = async (req: AuthRequest, res: Response): Promise<vo
 
     // Apply action
     switch (actionTaken) {
-      case "DELETE_MESSAGE":
-        await Message.findByIdAndUpdate(report.targetId, { isDeleted: true });
-        break;
-      case "FLAG_USER":
-        await User.findByIdAndUpdate(report.reportedUserId, { 
-          "moderationFlags.isFlagged": true,
-          "moderationFlags.lastModeratedAt": new Date()
+      case "MESSAGE_DELETED":
+        await Message.findByIdAndUpdate(report.messageId, { 
+          isDeleted: true,
+          deletedBy: new Types.ObjectId(expertId),
+          deletedAt: new Date(),
+          text: "This message was removed by a moderator."
         });
         break;
-      case "WARN":
+      case "USER_FLAGGED":
+        await User.findByIdAndUpdate(report.reportedUserId, { 
+          isFlagged: true,
+          flaggedBy: new Types.ObjectId(expertId),
+          flaggedAt: new Date(),
+          flagReason: report.reason
+        });
+        break;
+      case "WARNING":
         updatedUser = await User.findByIdAndUpdate(
           report.reportedUserId,
           {
@@ -122,40 +129,30 @@ export const resolveReport = async (req: AuthRequest, res: Response): Promise<vo
           { new: true, select: "email username moderationFlags.warningCount" }
         ).lean();
         break;
-      case "BAN_USER" as any:
-        updatedUser = await User.findByIdAndUpdate(
-          report.reportedUserId,
-          {
-            userStatus: UserStatus.BANNED,
-            "moderationFlags.lastModeratedAt": new Date(),
-          },
-          { new: true, select: "email username moderationFlags.warningCount" }
-        ).lean();
-        break;
-      case "DISMISS":
+      case "DISMISSED":
         // No structural changes, just resolve the report
         break;
     }
 
-    report.status = actionTaken === "DISMISS" ? "REJECTED" : "RESOLVED";
+    report.status = actionTaken === "DISMISSED" ? ReportStatus.REJECTED : ReportStatus.RESOLVED;
     report.resolutionDetails = {
-      actionTaken,
+      actionTaken: actionTaken as "DISMISSED" | "WARNING" | "MESSAGE_DELETED" | "USER_FLAGGED",
       resolvedBy: new Types.ObjectId(expertId),
       resolvedAt: new Date(),
-      note
+      notes
     };
 
     await report.save();
 
-    if (actionTaken === "WARN" || actionTaken === "BAN_USER") {
+    if (actionTaken === "WARNING" || actionTaken === "USER_FLAGGED") {
       const reportedUserId = report.reportedUserId;
-      const reason = report.reason || note;
-      const moderationAction = actionTaken === "BAN_USER" ? "BAN_USER" : "WARN";
-      const notificationType = actionTaken === "BAN_USER" ? "SYSTEM_ALERT" : "MODERATION";
-      const notificationTitle = actionTaken === "BAN_USER" ? "Security Alert" : "Account Notice";
+      const reason = report.reason || notes;
+      const moderationAction = actionTaken === "USER_FLAGGED" ? "FLAG_USER" : "WARN";
+      const notificationType = actionTaken === "USER_FLAGGED" ? "SYSTEM_ALERT" : "MODERATION";
+      const notificationTitle = actionTaken === "USER_FLAGGED" ? "Security Alert" : "Account Notice";
       const baseMessage =
-        actionTaken === "BAN_USER"
-          ? "Your account has been permanently suspended due to violations of community guidelines."
+        actionTaken === "USER_FLAGGED"
+          ? "Your account has been flagged for review due to violations of community guidelines."
           : "Your account received a formal warning for violating community guidelines.";
       const message = reason ? `${baseMessage} Reason: ${reason}` : baseMessage;
 
@@ -211,12 +208,12 @@ export const banUser = async (req: AuthRequest, res: Response): Promise<void> =>
 
     await User.findByIdAndUpdate(userIdToBan, { userStatus: UserStatus.BANNED });
     await Report.findByIdAndUpdate(reportId, { 
-      status: "RESOLVED",
+      status: ReportStatus.RESOLVED,
       resolutionDetails: {
-        actionTaken: "FLAG_USER",
+        actionTaken: "USER_FLAGGED",
         resolvedBy: new Types.ObjectId(req.user?.id),
         resolvedAt: new Date(),
-        note: "Manually banned via legacy endpoint"
+        notes: "Manually flagged via legacy endpoint"
       }
     });
 
