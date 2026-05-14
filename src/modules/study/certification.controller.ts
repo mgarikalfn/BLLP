@@ -23,7 +23,7 @@ const levelValues = new Set<string>([
   ProficiencyLevel.ADVANCED,
 ]);
 
-const sanitizeObject = (value: any) => {
+const sanitizeObject = (value: any): any => {
   if (Array.isArray(value)) {
     return value.map((item) => sanitizeObject(item));
   }

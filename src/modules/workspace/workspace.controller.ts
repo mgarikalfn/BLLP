@@ -101,7 +101,7 @@ export const getTopicsFeed = async (req: AuthRequest, res: Response) => {
 
     const topicsWithPath = topics.map(topic => {
       const tId = topic._id.toString();
-      const topicLevelIndex = Math.max(levelOrder.indexOf(topic.level), 0);
+      const topicLevelIndex = Math.max(levelOrder.indexOf(topic.level as ProficiencyLevel), 0);
       const isAutoCompleted = topicLevelIndex < userLevelIndex;
       
       // Define the "Internal Order" for this specific topic

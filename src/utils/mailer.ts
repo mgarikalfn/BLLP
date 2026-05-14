@@ -9,7 +9,7 @@ type VerificationEmailInput = {
 type ModerationEmailInput = {
   to: string;
   username: string;
-  action: "WARN" | "BAN_USER";
+  action: "WARN" | "BAN_USER" | "FLAG_USER";
   reason?: string;
   warningCount?: number;
 };
@@ -68,12 +68,17 @@ const buildModerationHtml = (input: ModerationEmailInput) => {
     process.env.COMMUNITY_GUIDELINES_URL || "https://example.com/community-guidelines";
   const reasonText = input.reason ? `<p style="margin:0 0 16px;">Reason: ${input.reason}</p>` : "";
 
-  const warningSection =
-    input.action === "WARN"
-      ? `<p style="margin:0 0 16px;">Current warning count: ${input.warningCount ?? "N/A"}</p>
-         <p style="margin:0 0 16px;">Further violations may result in a permanent ban.</p>`
-      : `<p style="margin:0 0 16px;">Your account has been permanently suspended.</p>
+  let warningSection = "";
+  if (input.action === "WARN") {
+    warningSection = `<p style="margin:0 0 16px;">Current warning count: ${input.warningCount ?? "N/A"}</p>
+         <p style="margin:0 0 16px;">Further violations may result in a permanent ban.</p>`;
+  } else if (input.action === "BAN_USER") {
+    warningSection = `<p style="margin:0 0 16px;">Your account has been permanently suspended.</p>
          <p style="margin:0 0 16px;">Please review our <a href="${guidelinesUrl}">Community Guidelines</a>.</p>`;
+  } else if (input.action === "FLAG_USER") {
+    warningSection = `<p style="margin:0 0 16px;">Your account has been flagged for review due to violations of community guidelines.</p>
+         <p style="margin:0 0 16px;">Please review our <a href="${guidelinesUrl}">Community Guidelines</a>.</p>`;
+  }
 
   return `<!DOCTYPE html>
   <html lang="en">
@@ -114,15 +119,19 @@ export const sendModerationEmail = async ({
 }: ModerationEmailInput) => {
   const transporter = getTransporter();
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "no-reply@example.com";
-  const subject = action === "BAN_USER" ? "Security Alert" : "Account Notice";
+  const subject = action === "BAN_USER" || action === "FLAG_USER" ? "Security Alert" : "Account Notice";
   const guidelineLine =
     process.env.COMMUNITY_GUIDELINES_URL || "https://example.com/community-guidelines";
   const reasonLine = reason ? `Reason: ${reason}\n\n` : "";
 
-  const textBody =
-    action === "BAN_USER"
-      ? `Hi ${username},\n\nYour account has been permanently suspended.\n\n${reasonLine}Please review our Community Guidelines: ${guidelineLine}\n\nIf you believe this is a mistake, contact support.`
-      : `Hi ${username},\n\nWe issued a formal warning to your account.\n\n${reasonLine}Current warning count: ${warningCount ?? "N/A"}\n\nFurther violations may result in a permanent ban.\n\nIf you believe this is a mistake, contact support.`;
+  let textBody = "";
+  if (action === "BAN_USER") {
+    textBody = `Hi ${username},\n\nYour account has been permanently suspended.\n\n${reasonLine}Please review our Community Guidelines: ${guidelineLine}\n\nIf you believe this is a mistake, contact support.`;
+  } else if (action === "FLAG_USER") {
+    textBody = `Hi ${username},\n\nYour account has been flagged for review due to violations of community guidelines.\n\n${reasonLine}Please review our Community Guidelines: ${guidelineLine}\n\nIf you believe this is a mistake, contact support.`;
+  } else {
+    textBody = `Hi ${username},\n\nWe issued a formal warning to your account.\n\n${reasonLine}Current warning count: ${warningCount ?? "N/A"}\n\nFurther violations may result in a permanent ban.\n\nIf you believe this is a mistake, contact support.`;
+  }
 
   await transporter.sendMail({
     from,
