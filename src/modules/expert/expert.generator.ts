@@ -149,19 +149,19 @@ Return ONLY valid JSON matching this exact structure:
     {
       "order": 1,
       "characterId": "char1",
-      "content": { "am": "...", "ao": "..." },
+      "content": { "am": "First line of dialogue", "ao": "First line of dialogue" },
       "isInteractive": false
     },
     {
       "order": 2,
       "characterId": "char2",
-      "content": { "am": "...", "ao": "..." },
+      "content": { "am": "The actual correct line the character says", "ao": "The actual correct line the character says" },
       "isInteractive": true,
       "question": { "am": "ምን ማለት አለብህ?", "ao": "Maal jechuu qabda?" },
       "options": [
-        { "am": "ምርጫ 1", "ao": "Filannoo 1" },
-        { "am": "ምርጫ 2", "ao": "Filannoo 2" },
-        { "am": "ምርጫ 3", "ao": "Filannoo 3" }
+        { "am": "The actual correct line the character says", "ao": "The actual correct line the character says" },
+        { "am": "Wrong option 1", "ao": "Wrong option 1" },
+        { "am": "Wrong option 2", "ao": "Wrong option 2" }
       ],
       "correctAnswerIndex": 0
     }
