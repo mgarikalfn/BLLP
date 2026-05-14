@@ -6,14 +6,18 @@ import { Role, ProficiencyLevel, User } from "../user/user.model";
 import { StudyStats } from "../study/study.statts.models";
 
 const getGoogleClientIds = () => {
-  const ids = process.env.GOOGLE_CLIENT_IDS || process.env.GOOGLE_CLIENT_ID;
+  const webId = process.env.GOOGLE_CLIENT_ID;
+  const mobileId = process.env.GOOGLE_CLIENT_ID_MOBILE;
 
-  if (!ids) {
-    throw new Error("Missing GOOGLE_CLIENT_IDS or GOOGLE_CLIENT_ID");
+  if (!webId && !mobileId) {
+    throw new Error("Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_ID_MOBILE");
   }
 
-  // Split by comma and remove whitespace
-  return ids.split(",").map((id) => id.trim());
+  const ids: string[] = [];
+  if (webId) ids.push(...webId.split(",").map((id) => id.trim()));
+  if (mobileId) ids.push(...mobileId.split(",").map((id) => id.trim()));
+
+  return ids;
 };
 
 const resolveUsername = async (raw: string) => {
