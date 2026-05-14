@@ -75,14 +75,32 @@ const addMeta = (items: any[], contentType: ContentType, titleBuilder: TitleBuil
   }));
 
 const questionTitleBuilder: TitleBuilder = (item) => {
-  let preview = "";
-  try {
-    preview = JSON.stringify(item?.content ?? {}).slice(0, 30);
-  } catch {
-    preview = "";
+  const content = item?.content ?? {};
+  
+  // 1. Try to extract standard 'prompt' or 'question' object/string
+  const rawPrompt = content.prompt ?? content.question ?? content.instruction;
+  
+  if (rawPrompt) {
+    if (typeof rawPrompt === "string") return rawPrompt;
+    if (typeof rawPrompt === "object") {
+      return rawPrompt.am || rawPrompt.ao || "Question";
+    }
   }
 
-  return preview ? `Question${preview}` : "Question";
+  // 2. Fallback for specific question types
+  if (item?.type === "CLOZE" && content.textBeforeBlank) {
+    return `${content.textBeforeBlank} [...] ${content.textAfterBlank || ""}`;
+  }
+  
+  if (item?.type === "SCRAMBLE" && content.correctSentence) {
+    if (typeof content.correctSentence === "string") return content.correctSentence;
+    if (typeof content.correctSentence === "object") {
+      return content.correctSentence.am || content.correctSentence.ao || "Scramble Question";
+    }
+  }
+
+  // 3. Last resort fallback
+  return `${item?.type || "Question"} Exercise`;
 };
 
 const titleBuilders: Record<ContentType, TitleBuilder> = {
@@ -203,8 +221,12 @@ const fetchContent = async (type: ContentType, filter: FetchFilter) => {
       return addMeta(items, type, titleBuilders[type]);
     }
     case "QUESTION": {
-      const items = await Question.find(filter).lean();
-      return addMeta(items, type, titleBuilders[type]);
+      const items = await Question.find(filter).populate("topicId", "level").lean();
+      const mapped = items.map((q: any) => ({
+        ...q,
+        level: q.topicId?.level,
+      }));
+      return addMeta(mapped, type, titleBuilders[type]);
     }
     case "TOPIC": {
       const topicFilter = normalizeTopicFilter(filter);

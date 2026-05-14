@@ -262,6 +262,8 @@ export const resumeLessonAudioGeneration = async (req: Request, res: Response) =
     let generatedCount = 0;
     let attemptedCount = 0;
 
+    const target = req.query.target as string || "both"; // "vocab", "example", or "both"
+
     // Loop through all vocabulary items
     for (let i = 0; i < lesson.vocabulary.length; i++) {
       const vocab: any = lesson.vocabulary[i];
@@ -271,7 +273,7 @@ export const resumeLessonAudioGeneration = async (req: Request, res: Response) =
 
       try {
         // --- 1. Amharic & Oromo Vocab Audio ---
-        if (vocab.am && !vocab.audioUrl.am) {
+        if ((target === "vocab" || target === "both") && vocab.am && !vocab.audioUrl.am) {
           attemptedCount++;
           try {
             console.log(`Generating Amharic vocab audio for: ${vocab.am}`);
@@ -289,7 +291,7 @@ export const resumeLessonAudioGeneration = async (req: Request, res: Response) =
           }
         }
         
-        if (vocab.ao && !vocab.audioUrl.ao) {
+        if ((target === "vocab" || target === "both") && vocab.ao && !vocab.audioUrl.ao) {
           attemptedCount++;
           try {
             console.log(`Generating Oromo vocab audio for: ${vocab.ao}`);
@@ -308,7 +310,7 @@ export const resumeLessonAudioGeneration = async (req: Request, res: Response) =
         }
 
         // --- 2. Example Audio ---
-        if (vocab.example) {
+        if ((target === "example" || target === "both") && vocab.example) {
           if (vocab.example.am && !vocab.example.audioUrl.am) {
             attemptedCount++;
             try {
