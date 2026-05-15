@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Topic } from "../content/topic.model";
 import { Question } from "../content/question.model";
-import { ProficiencyLevel } from "../user/user.model";
+import { ProficiencyLevel, User } from "../user/user.model";
 import { TestAttempt } from "./testAttempt.model";
 
 interface AuthRequest extends Request {
@@ -235,6 +235,56 @@ export const submitCertification = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("submitCertification error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getCertificate = async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user?.id;
+
+  try {
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { attemptId } = req.params;
+
+    if (!attemptId || !Types.ObjectId.isValid(attemptId)) {
+      return res.status(400).json({ message: "Invalid attemptId" });
+    }
+
+    const attempt = await TestAttempt.findById(attemptId).lean();
+    if (!attempt) {
+      return res.status(404).json({ message: "Certificate not found" });
+    }
+
+    if (attempt.userId.toString() !== userId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (!attempt.passed) {
+      return res.status(400).json({ message: "Test was not passed, no certificate available" });
+    }
+
+    const user = await User.findById(userId).select("username firstName lastName").lean();
+
+    return res.json({
+      data: {
+        certificateId: attempt._id,
+        level: attempt.level,
+        score: attempt.score,
+        createdAt: attempt.endTime || attempt.createdAt,
+        user: {
+          username: user?.username,
+          name: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.username,
+          fullName: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.username,
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("getCertificate error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };

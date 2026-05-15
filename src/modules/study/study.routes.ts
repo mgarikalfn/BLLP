@@ -12,7 +12,7 @@ import {
   getSeasonLeaderboard,
   getSeasonTier,
 } from "./study.controller";
-import { startCertification, submitCertification } from "./certification.controller";
+import { startCertification, submitCertification, getCertificate } from "./certification.controller";
 import { authenticate } from "../../middleware/auth.middleware";
 
 const router = Router();
@@ -291,5 +291,27 @@ router.get("/leaderboard/season", authenticate, getSeasonLeaderboard);
  *         description: Success
  */
 router.get("/season/tier", authenticate, getSeasonTier);
+/**
+ * @openapi
+ * /api/study/certifications/{attemptId}:
+ *   get:
+ *     tags:
+ *       - Study
+ *     summary: GET /certifications/{attemptId}
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success
+ *       404:
+ *         description: Certificate not found
+ */
+router.get("/certifications/:attemptId", authenticate, getCertificate);
 
 export default router;
