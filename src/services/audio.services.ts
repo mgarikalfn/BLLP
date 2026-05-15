@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Storage, Bucket } from "@google-cloud/storage";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
 export class GeminiAudioService {
   private genAI: GoogleGenerativeAI;
@@ -33,9 +34,25 @@ export class GeminiAudioService {
       
     this.bucket = this.storage.bucket(bucketName);
   }
+  
+  private getFileHash(text: string, language: string): string {
+    return crypto.createHash("md5").update(`${language}_${text}`).digest("hex");
+  }
 
   async generateLessonAudio(text: string, language: 'amharic' | 'oromo'): Promise<string> {
     try {
+      const hash = this.getFileHash(text, language);
+      const fileName = `vocabulary/${language}_${hash}.wav`;
+      const file = this.bucket.file(fileName);
+
+      // Check if file already exists in GCS
+      const [exists] = await file.exists();
+      if (exists) {
+        console.log(`[GeminiAudioService] Audio already exists for "${text.slice(0, 20)}...", reusing ${fileName}`);
+        return `https://storage.googleapis.com/${this.bucket.name}/${fileName}`;
+      }
+
+      console.log(`[GeminiAudioService] Generating new audio for "${text.slice(0, 20)}..."`);
       const pronunciationHints = language === 'oromo' 
         ? "Ensure the double consonants like 'tt' and the implosive 'dh' are distinct and clear." 
         : "Ensure the Ge'ez glottal stops and rhythm are natural.";
@@ -60,11 +77,8 @@ export class GeminiAudioService {
 
       const pcmBuffer = Buffer.from(audioPart.inlineData.data, "base64");
       const wavBuffer = this.addWavHeader(pcmBuffer, 24000); 
-
-      const fileName = `vocabulary/${language}_${Date.now()}.wav`;
       
       // Upload to Google Cloud Storage
-      const file = this.bucket.file(fileName);
       await file.save(wavBuffer, {
         metadata: {
           contentType: 'audio/wav',

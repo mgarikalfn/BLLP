@@ -69,7 +69,7 @@ export enum ReportStatus {
 }
 
 export interface ResolutionDetails {
-  actionTaken: "DISMISSED" | "WARNING" | "MESSAGE_DELETED" | "USER_FLAGGED";
+  actionTaken: "DISMISS" | "WARNING" | "MESSAGE_DELETED" | "USER_FLAGGED" | "BAN_USER";
   resolvedBy: Types.ObjectId;
   resolvedAt: Date;
   notes?: string;
@@ -106,7 +106,7 @@ const reportSchema = new Schema<IReport>(
       default: ReportStatus.PENDING 
     },
     resolutionDetails: {
-      actionTaken: { type: String, enum: ["DISMISSED", "WARNING", "MESSAGE_DELETED", "USER_FLAGGED"] },
+      actionTaken: { type: String, enum: ["DISMISS", "WARNING", "MESSAGE_DELETED", "USER_FLAGGED", "BAN_USER"] },
       resolvedBy: { type: Schema.Types.ObjectId, ref: "User" },
       resolvedAt: { type: Date },
       notes: { type: String }

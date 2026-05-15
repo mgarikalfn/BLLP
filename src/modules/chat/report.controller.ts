@@ -129,14 +129,14 @@ export const resolveReport = async (req: AuthRequest, res: Response): Promise<vo
           { new: true, select: "email username moderationFlags.warningCount" }
         ).lean();
         break;
-      case "DISMISSED":
+      case "DISMISS":
         // No structural changes, just resolve the report
         break;
     }
 
-    report.status = actionTaken === "DISMISSED" ? ReportStatus.REJECTED : ReportStatus.RESOLVED;
+    report.status = actionTaken === "DISMISS" ? ReportStatus.REJECTED : ReportStatus.RESOLVED;
     report.resolutionDetails = {
-      actionTaken: actionTaken as "DISMISSED" | "WARNING" | "MESSAGE_DELETED" | "USER_FLAGGED",
+      actionTaken: actionTaken as "DISMISS" | "WARNING" | "MESSAGE_DELETED" | "USER_FLAGGED" | "BAN_USER",
       resolvedBy: new Types.ObjectId(expertId),
       resolvedAt: new Date(),
       notes
