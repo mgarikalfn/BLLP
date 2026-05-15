@@ -200,7 +200,7 @@ export const submitCertification = async (req: Request, res: Response) => {
 
     let correctCount = 0;
     const userAnswers = answers.map((answer) => {
-      const questionId = answer.questionId;
+      const questionId = String(answer.questionId);
       const question = questionMap.get(questionId);
       const isCorrect = question ? isAnswerCorrect(question, answer.answerGiven) : false;
 
@@ -268,17 +268,18 @@ export const getCertificate = async (req: Request, res: Response) => {
     }
 
     const user = await User.findById(userId).select("username firstName lastName").lean();
+    const u = user as any;
 
     return res.json({
       data: {
         certificateId: attempt._id,
         level: attempt.level,
         score: attempt.score,
-        createdAt: attempt.endTime || attempt.createdAt,
+        createdAt: attempt.endTime || (attempt as any).createdAt,
         user: {
-          username: user?.username,
-          name: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.username,
-          fullName: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.username,
+          username: u?.username,
+          name: u?.firstName && u?.lastName ? `${u.firstName} ${u.lastName}` : u?.username,
+          fullName: u?.firstName && u?.lastName ? `${u.firstName} ${u.lastName}` : u?.username,
         }
       }
     });
