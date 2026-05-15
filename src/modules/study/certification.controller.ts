@@ -248,9 +248,10 @@ export const getCertificate = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { attemptId } = req.params;
+    const attemptIdRaw = req.params.attemptId;
+    const attemptId = Array.isArray(attemptIdRaw) ? attemptIdRaw[0] : attemptIdRaw;
 
-    if (!attemptId || !Types.ObjectId.isValid(attemptId)) {
+    if (!attemptId || !Types.ObjectId.isValid(String(attemptId))) {
       return res.status(400).json({ message: "Invalid attemptId" });
     }
 
